@@ -1,0 +1,40 @@
+import { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
+import { sendResponse } from '../response';
+
+export interface AuthPayload {
+  id: string;
+  role: string;
+  vendor_id?: string | null;
+}
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: AuthPayload;
+    }
+  }
+}
+
+export const authMiddleware = (req: Request, res: Response, next: NextFunction): void => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.log(`[auth]: Access Denied - 401 - Missing Token`);
+    sendResponse(res, 401, false, 'Missing or invalid token');
+    return;
+  }
+
+  const token = authHeader.split(' ')[1];
+  const secret = process.env.JWT_SECRET || 'super-secret-key-fallback';
+
+  try {
+    const decoded = jwt.verify(token, secret) as AuthPayload;
+    req.user = decoded;
+    console.log(`[auth]: Verify Token Successful - 200 - User ID: ${decoded.id}`);
+    next();
+  } catch (error: any) {
+    console.log(`[Error - auth]: ${req.method} ${req.originalUrl || req.path} - 401 - ${error.message}`);
+    sendResponse(res, 401, false, 'Invalid token');
+  }
+};
