@@ -1,0 +1,24 @@
+{
+  "name": "reshop",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "workspaces": [
+    "backend",
+    "frontend/storefront",
+    "frontend/shared-ui"
+  ],
+  "devDependencies": {
+    "@types/react-router-dom": "^5.3.3"
+  },
+  "dependencies": {
+    "react-router-dom": "^7.14.2"
+  }
+}
