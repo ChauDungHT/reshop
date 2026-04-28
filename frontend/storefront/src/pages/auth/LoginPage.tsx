@@ -1,55 +1,120 @@
-import { useState } from 'react';
-import { useAuth } from '../../../../shared-ui/src/context/AuthContext';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useAuth } from '../../../../shared-ui/src/context/AuthContext';
+import axiosInstance from '../../../../shared-ui/src/lib/axios';
+
+const loginSchema = z.object({
+  email: z.string().email('Email không hợp lệ'),
+  password: z.string().min(6, 'Mật khẩu tối thiểu 6 ký tự'),
+});
+
+type LoginForm = z.infer<typeof loginSchema>;
 
 const LoginPage = () => {
-  const [token, setToken] = useState('');
-  const { login } = useAuth();
   const navigate = useNavigate();
+  const { login } = useAuth();
+  const [serverError, setServerError] = useState<string | null>(null);
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (token) {
-      login(token);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginForm>({ resolver: zodResolver(loginSchema) });
+
+  const onSubmit = async (data: LoginForm) => {
+    setServerError(null);
+    try {
+      const res = await axiosInstance.post('/auth/login', data);
+      const payload = res.data.data; // backend trả về { success, message, data }
+      
+      login(payload.token, payload.user);
       navigate('/dashboard');
+    } catch (err: any) {
+      setServerError(err.response?.data?.message || 'Đăng nhập thất bại. Vui lòng thử lại.');
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0f172a] p-4 font-sans">
-      <div className="w-full max-w-md bg-[#1e293b] rounded-2xl shadow-2xl border border-slate-800 p-8">
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+      {/* Background decoration */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -left-40 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-violet-600/10 rounded-full blur-3xl" />
+      </div>
+
+      <div className="relative w-full max-w-sm">
+        {/* Logo */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
-            Chào mừng quay lại
+          <h1 className="text-4xl font-black tracking-tight bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent">
+            RESHOP
           </h1>
-          <p className="text-slate-400 mt-2">Dán JWT Token để đăng nhập hệ thống</p>
+          <p className="text-slate-500 text-sm mt-2">Đăng nhập vào tài khoản của bạn</p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">JWT Token</label>
-            <textarea
-              className="w-full h-32 px-4 py-3 bg-[#0f172a] border border-slate-700 rounded-xl text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder:text-slate-600"
-              placeholder="eyJhbGciOiJIUzI1NiIsInR5..."
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              required
-            />
-          </div>
+        {/* Card */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl shadow-slate-950">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
 
-          <button
-            type="submit"
-            className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl hover:from-blue-500 hover:to-indigo-500 transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98]"
-          >
-            Đăng nhập
-          </button>
-        </form>
+            {/* Email */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                Email
+              </label>
+              <input
+                {...register('email')}
+                type="email"
+                placeholder="you@example.com"
+                autoComplete="email"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-slate-100 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+              />
+              {errors.email && (
+                <p className="mt-1.5 text-xs text-rose-400">{errors.email.message}</p>
+              )}
+            </div>
 
-        <div className="mt-8 pt-6 border-t border-slate-800">
-          <p className="text-xs text-center text-slate-500 leading-relaxed">
-            Hệ thống quản trị Reshop Multi-vendor. <br />
-            Nếu gặp sự cố, vui lòng liên hệ hỗ trợ kỹ thuật.
-          </p>
+            {/* Password */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                Mật khẩu
+              </label>
+              <input
+                {...register('password')}
+                type="password"
+                placeholder="••••••••"
+                autoComplete="current-password"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-slate-100 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+              />
+              {errors.password && (
+                <p className="mt-1.5 text-xs text-rose-400">{errors.password.message}</p>
+              )}
+            </div>
+
+            {/* Server error */}
+            {serverError && (
+              <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl px-4 py-3 text-rose-400 text-sm">
+                {serverError}
+              </div>
+            )}
+
+            {/* Submit */}
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-all duration-150 text-sm tracking-wide"
+            >
+              {isSubmitting ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Đang đăng nhập...
+                </span>
+              ) : (
+                'Đăng nhập'
+              )}
+            </button>
+          </form>
         </div>
       </div>
     </div>
