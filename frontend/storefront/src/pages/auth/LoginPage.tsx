@@ -48,7 +48,7 @@ const LoginPage = () => {
       <div className="relative w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-black tracking-tight bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent">
+          <h1 className="text-4xl font-black tracking-tight bg-linear-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent">
             RESHOP
           </h1>
           <p className="text-slate-500 text-sm mt-2">Đăng nhập vào tài khoản của bạn</p>

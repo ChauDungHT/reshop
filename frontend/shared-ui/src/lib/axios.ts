@@ -1,55 +1,34 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-const TOKEN_KEY = 'reshop_token';
-
-// ─── Axios Instance ───────────────────────────────────────────────────────
-const api = axios.create({
-  baseURL: API_BASE_URL,
+const axiosInstance = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
   timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { 'Content-Type': 'application/json' },
 });
 
-// ─── Request Interceptor: Auto-attach Bearer Token ────────────────────────
-api.interceptors.request.use(
+// Request interceptor: gắn token vào header
+axiosInstance.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem(TOKEN_KEY);
+    const token = localStorage.getItem('reshop_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-      console.log(`[axios]: Interceptor Request - Attaching Bearer Token to ${config.method?.toUpperCase()} ${config.url}`);
     }
     return config;
   },
-  (error) => {
-    console.log(`[Error - axios]: Request Interceptor Failed - ${error.message}`);
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// ─── Response Interceptor: Auto-logout on 401 ────────────────────────────
-api.interceptors.response.use(
-  (response) => {
-    return response;
-  },
+// Response interceptor: xử lý 401
+axiosInstance.interceptors.response.use(
+  (response) => response,
   (error) => {
-    const status = error.response?.status;
-    const url = error.config?.url || 'unknown';
-
-    if (status === 401) {
-      console.log(`[auth-context]: Logout triggered - 401 Unauthorized intercepted on ${url}`);
-      // Clear stored token and redirect to login
-      localStorage.removeItem(TOKEN_KEY);
-      // Dispatch custom event so AuthContext can update state
-      window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+    if (error.response?.status === 401) {
+      localStorage.removeItem('reshop_token');
+      localStorage.removeItem('reshop_user');
       window.location.href = '/login';
-    } else {
-      console.log(`[Error - axios]: Response Error - ${status} - ${url}`);
     }
-
     return Promise.reject(error);
   }
 );
 
-export default api;
+export default axiosInstance;

@@ -98,12 +98,12 @@ const CustomerDashboard = () => {
           <div className="divide-y divide-slate-800">
             {orders.map((order: any) => (
               <div key={order.id} className="px-6 py-4 flex items-center gap-4 hover:bg-slate-800/50 transition-colors">
-                <div className="w-10 h-10 bg-indigo-600/20 rounded-xl flex items-center justify-center text-lg flex-shrink-0">📦</div>
+                <div className="w-10 h-10 bg-indigo-600/20 rounded-xl flex items-center justify-center text-lg shrink-0">📦</div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-slate-200 truncate">{order.product}</p>
                   <p className="text-xs text-slate-500">{order.id} · {order.date}</p>
                 </div>
-                <div className="text-right flex-shrink-0">
+                <div className="text-right shrink-0">
                   <p className="text-sm font-bold text-emerald-400">{order.amount}</p>
                   <div className="mt-1"><OrderStatusBadge status={order.status} /></div>
                 </div>

@@ -1,133 +1,159 @@
-import { ReactNode } from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { useState } from 'react';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import type { UserRole } from '../context/AuthContext';
 
-interface SidebarItemProps {
-  to: string;
+interface NavItem {
   label: string;
-  icon?: ReactNode;
+  path: string;
+  icon: string;
 }
 
-const SidebarItem = ({ to, label, icon }: SidebarItemProps) => {
-  const location = useLocation();
-  const isActive = location.pathname === to;
-
-  return (
-    <Link
-      to={to}
-      className={`flex items-center px-4 py-3 mb-2 rounded-lg transition-all duration-200 ${
-        isActive
-          ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
-          : 'text-gray-400 hover:bg-gray-800 hover:text-white'
-      }`}
-    >
-      {icon && <span className="mr-3">{icon}</span>}
-      <span className="font-medium">{label}</span>
-    </Link>
-  );
+const navByRole: Record<UserRole, NavItem[]> = {
+  customer: [
+    { label: 'Tổng quan', path: '/dashboard', icon: '⊞' },
+    { label: 'Đơn hàng', path: '/orders', icon: '📦' },
+    { label: 'Cửa hàng', path: '/shop', icon: '🛍' },
+    { label: 'Tài khoản', path: '/account', icon: '👤' },
+  ],
+  vendor: [
+    { label: 'Dashboard', path: '/dashboard', icon: '📊' },
+    { label: 'Sản phẩm', path: '/products', icon: '🗂' },
+    { label: 'Đơn hàng', path: '/orders', icon: '📋' },
+    { label: 'Tài chính', path: '/finance', icon: '💰' },
+  ],
+  admin: [
+    { label: 'Tổng quan', path: '/dashboard', icon: '🌐' },
+    { label: 'Người dùng', path: '/users', icon: '👥' },
+    { label: 'Vendors', path: '/vendors', icon: '🏪' },
+    { label: 'Cấu hình', path: '/settings', icon: '⚙️' },
+    { label: 'Báo cáo', path: '/reports', icon: '📑' },
+  ],
 };
 
-export const DashboardLayout = () => {
+const roleLabel: Record<UserRole, string> = {
+  customer: 'Khách Hàng',
+  vendor: 'Nhà Bán Hàng',
+  admin: 'Quản Trị Viên',
+};
+
+const roleBadgeColor: Record<UserRole, string> = {
+  customer: 'bg-emerald-500/15 text-emerald-400',
+  vendor: 'bg-amber-500/15 text-amber-400',
+  admin: 'bg-rose-500/15 text-rose-400',
+};
+
+const DashboardLayout = () => {
   const { user, logout } = useAuth();
-  const isPendingVendor = user?.role === 'vendor' && user?.status === 'pending_approval';
+  const navigate = useNavigate();
+  const [collapsed, setCollapsed] = useState(false);
+
+  if (!user) return null;
+
+  const navItems = navByRole[user.role];
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   return (
-    <div className="flex h-screen bg-[#0f172a] text-slate-200 overflow-hidden font-sans">
+    <div className="flex h-screen bg-slate-950 text-slate-100 font-sans overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-64 bg-[#1e293b] border-r border-slate-800 flex flex-col">
-        <div className="p-6 border-b border-slate-800">
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
-            Reshop
-          </h1>
-        </div>
-
-        <nav className="flex-1 p-4 mt-4 overflow-y-auto">
-          {/* Menu tĩnh sẽ bị ẩn nếu Vendor đang chờ duyệt */}
-          {!isPendingVendor ? (
-            <>
-              <SidebarItem to="/dashboard" label="Tổng quan" />
-              {user?.role === 'customer' && (
-                <>
-                  <SidebarItem to="/orders" label="Đơn hàng của tôi" />
-                  <SidebarItem to="/profile" label="Hồ sơ" />
-                </>
-              )}
-              {user?.role === 'vendor' && (
-                <>
-                  <SidebarItem to="/products" label="Sản phẩm" />
-                  <SidebarItem to="/sales" label="Doanh thu" />
-                </>
-              )}
-              {user?.role === 'admin' && (
-                <>
-                  <SidebarItem to="/users" label="Người dùng" />
-                  <SidebarItem to="/vendors" label="Phê duyệt NCC" />
-                </>
-              )}
-            </>
-          ) : (
-            <div className="px-4 py-3 text-sm text-yellow-500 bg-yellow-500/10 rounded-lg border border-yellow-500/20">
-              Menu bị hạn chế cho đến khi tài khoản được duyệt.
+      <aside
+        className={`flex flex-col border-r border-slate-800 transition-all duration-300 ${
+          collapsed ? 'w-16' : 'w-60'
+        } bg-slate-900/80 backdrop-blur-sm`}
+      >
+        {/* Header Section */}
+        <div className="border-b border-slate-800 p-2">
+          {!collapsed && (
+            <div className="px-4 py-3">
+              <span className="text-xl font-black tracking-tight text-white">
+                RESHOP
+              </span>
             </div>
           )}
+          <div className={`flex items-center ${collapsed ? 'h-12 justify-center' : 'px-2 justify-end'}`}>
+            <button
+              onClick={() => setCollapsed(!collapsed)}
+              className="p-1.5 rounded-lg hover:bg-slate-800 transition-colors text-slate-400"
+            >
+              {collapsed ? '→' : '←'}
+            </button>
+          </div>
+        </div>
+
+        {/* Nav Items */}
+        <nav className="flex-1 py-4 space-y-1 px-2 overflow-y-auto">
+          {navItems.map((item) => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              end={item.path === '/dashboard'}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+                  isActive
+                    ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`
+              }
+            >
+              <span className="text-base flex-shrink-0">{item.icon}</span>
+              {!collapsed && <span>{item.label}</span>}
+            </NavLink>
+          ))}
         </nav>
 
-        <div className="p-4 border-t border-slate-800">
-          <div className="flex items-center mb-4 px-2">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center font-bold text-white shadow-inner">
-              {user?.role?.[0].toUpperCase()}
+        {/* User Section */}
+        <div className="border-t border-slate-800 p-3">
+          <div className={`flex items-center gap-3 ${collapsed ? 'justify-center' : ''}`}>
+            <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold flex-shrink-0">
+              {user.name.charAt(0).toUpperCase()}
             </div>
-            <div className="ml-3 overflow-hidden">
-              <p className="text-sm font-semibold truncate uppercase tracking-wider text-blue-400">
-                {user?.role}
-              </p>
-              <p className="text-xs text-slate-500 truncate">{user?.id}</p>
-            </div>
+            {!collapsed && (
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-slate-200 truncate">{user.name}</p>
+                <span className={`text-xs px-1.5 py-0.5 rounded-full ${roleBadgeColor[user.role]}`}>
+                  {roleLabel[user.role]}
+                </span>
+              </div>
+            )}
           </div>
-          <button
-            onClick={logout}
-            className="w-full px-4 py-2 text-sm font-medium text-red-400 border border-red-400/30 rounded-lg hover:bg-red-500/10 transition-colors"
-          >
-            Đăng xuất
-          </button>
+          {!collapsed && (
+            <button
+              onClick={handleLogout}
+              className="mt-3 w-full text-xs text-slate-500 hover:text-rose-400 transition-colors text-left px-1"
+            >
+              Đăng xuất
+            </button>
+          )}
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden relative">
-        {/* Header/Top Bar */}
-        <header className="h-16 border-b border-slate-800 bg-[#1e293b]/50 backdrop-blur-md flex items-center px-8 justify-between z-10">
-          <h2 className="text-lg font-semibold text-slate-100">Dashboard</h2>
-          <div className="flex items-center space-x-4">
-            <span className="text-sm text-slate-400">ID: {user?.id}</span>
+      <main className="flex-1 overflow-y-auto">
+        {/* Top bar */}
+        <header className="h-16 border-b border-slate-800 flex items-center px-6 gap-4 bg-slate-950/80 backdrop-blur-sm sticky top-0 z-10">
+          <h1 className="text-sm font-semibold text-slate-400 uppercase tracking-widest">
+            {roleLabel[user.role]}
+          </h1>
+          <div className="ml-auto flex items-center gap-3">
+            <button className="relative p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors">
+              🔔
+              <span className="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full" />
+            </button>
+            <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold">
+              {user.name.charAt(0).toUpperCase()}
+            </div>
           </div>
         </header>
-
-        {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-8 bg-gradient-to-b from-[#0f172a] to-[#1e293b]">
-          {/* Cảnh báo Vendor Pending Approval */}
-          {isPendingVendor && (
-            <div className="mb-8 p-6 bg-red-500/10 border border-red-500/50 rounded-xl backdrop-blur-sm animate-pulse">
-              <div className="flex items-center">
-                <div className="p-3 bg-red-500 rounded-lg mr-4">
-                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-red-400 uppercase tracking-tight">Tài khoản đang chờ phê duyệt</h3>
-                  <p className="text-slate-400 mt-1">Cửa hàng của bạn đang được quản trị viên kiểm tra. Vui lòng quay lại sau.</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Render Page Content */}
-          <div className="max-w-6xl mx-auto">
-            <Outlet />
-          </div>
+        <div className="p-6">
+          <Outlet />
         </div>
       </main>
     </div>
   );
 };
+
+export default DashboardLayout;

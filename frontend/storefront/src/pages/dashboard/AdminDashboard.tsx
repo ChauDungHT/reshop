@@ -94,7 +94,7 @@ const AdminDashboard = () => {
               Có <strong className="text-rose-400">{s.openDisputes} tranh chấp</strong> giữa Vendor và Customer cần Admin xử lý.
             </p>
           </div>
-          <button className="text-xs bg-rose-600/20 hover:bg-rose-600/40 text-rose-400 border border-rose-600/30 px-3 py-1.5 rounded-lg transition-colors font-semibold flex-shrink-0">
+          <button className="text-xs bg-rose-600/20 hover:bg-rose-600/40 text-rose-400 border border-rose-600/30 px-3 py-1.5 rounded-lg transition-colors font-semibold shrink-0">
             Xử lý ngay
           </button>
         </div>
@@ -109,12 +109,12 @@ const AdminDashboard = () => {
         <div className="divide-y divide-slate-800">
           {audit.map((entry: any, i: number) => (
             <div key={i} className="px-6 py-4 flex items-center gap-4 hover:bg-slate-800/50 transition-colors">
-              <div className="w-8 h-8 bg-indigo-600/20 rounded-lg flex items-center justify-center text-sm flex-shrink-0">🔑</div>
+              <div className="w-8 h-8 bg-indigo-600/20 rounded-lg flex items-center justify-center text-sm shrink-0">🔑</div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-slate-200">{entry.action}</p>
                 <p className="text-xs text-slate-500 truncate">{entry.actor} · {entry.target}</p>
               </div>
-              <span className="text-xs text-slate-500 flex-shrink-0">{entry.time}</span>
+              <span className="text-xs text-slate-500 shrink-0">{entry.time}</span>
             </div>
           ))}
         </div>

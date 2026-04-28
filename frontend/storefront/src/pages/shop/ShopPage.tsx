@@ -107,7 +107,7 @@ const ShopPage = () => {
           <button
             key={cat}
             onClick={() => setActiveCategory(cat)}
-            className={`flex-shrink-0 text-sm font-semibold px-4 py-2 rounded-xl transition-all ${
+            className={`shrink-0 text-sm font-semibold px-4 py-2 rounded-xl transition-all ${
               activeCategory === cat
                 ? 'bg-indigo-600 text-white'
                 : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-600'

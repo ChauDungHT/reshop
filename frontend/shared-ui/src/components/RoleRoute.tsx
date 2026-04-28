@@ -1,21 +1,25 @@
 import { Navigate, Outlet } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, UserRole } from '../context/AuthContext';
 
 interface RoleRouteProps {
-  allowedRoles: string[];
+  allowedRoles: UserRole[];
 }
 
-export const RoleRoute = ({ allowedRoles }: RoleRouteProps) => {
-  const { role, isAuthenticated } = useAuth();
+const RoleRoute = ({ allowedRoles }: RoleRouteProps) => {
+  const { user, isLoading } = useAuth();
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950">
+        <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
-  if (!role || !allowedRoles.includes(role)) {
-    console.log(`[auth-route]: Access Denied - 403 - Role mismatch (Required: ${allowedRoles}, Current: ${role})`);
-    return <Navigate to="/403" replace />;
-  }
+  if (!user) return <Navigate to="/login" replace />;
+  if (!allowedRoles.includes(user.role)) return <Navigate to="/forbidden" replace />;
 
   return <Outlet />;
 };
+
+export default RoleRoute;

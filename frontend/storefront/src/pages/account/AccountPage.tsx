@@ -44,7 +44,7 @@ const AccountPage = () => {
 
       {/* Avatar Section */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex items-center gap-5">
-        <div className="w-16 h-16 rounded-2xl bg-indigo-600 flex items-center justify-center text-2xl font-black text-white flex-shrink-0">
+        <div className="w-16 h-16 rounded-2xl bg-indigo-600 flex items-center justify-center text-2xl font-black text-white shrink-0">
           {user?.name.charAt(0).toUpperCase()}
         </div>
         <div>

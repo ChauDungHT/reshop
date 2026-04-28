@@ -1,92 +1,64 @@
-import { createContext, useContext, useState, useCallback } from 'react';
-import type { ReactNode } from 'react';
-import { jwtDecode } from 'jwt-decode';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-// ─── Types ─────────────────────────────────────────────────────────────
-export interface UserPayload {
+export type UserRole = 'customer' | 'vendor' | 'admin';
+
+export interface AuthUser {
   id: string;
-  role: 'customer' | 'vendor' | 'admin';
-  vendor_id?: string | null;
-  status?: 'active' | 'pending_approval' | 'banned';
+  name: string;
+  email: string;
+  role: UserRole;
+  avatar?: string;
 }
 
-interface AuthState {
-  user: UserPayload | null;
-  role: string | null;
+interface AuthContextType {
+  user: AuthUser | null;
   token: string | null;
+  isLoading: boolean;
+  login: (token: string, user: AuthUser) => void;
+  logout: () => void;
   isAuthenticated: boolean;
 }
 
-interface AuthContextType extends AuthState {
-  login: (token: string) => void;
-  logout: () => void;
-}
-
-// ─── Context ────────────────────────────────────────────────────────────
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const TOKEN_KEY = 'reshop_token';
-
-// ─── Provider ───────────────────────────────────────────────────────────
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const getInitialState = (): AuthState => {
-    const savedToken = localStorage.getItem(TOKEN_KEY);
-    if (savedToken) {
-      try {
-        const decoded = jwtDecode<UserPayload>(savedToken);
-        console.log(`[auth-context]: Restored Session - User ID: ${decoded.id}`);
-        return {
-          user: decoded,
-          role: decoded.role,
-          token: savedToken,
-          isAuthenticated: true,
-        };
-      } catch {
-        console.log(`[auth-context]: Restore Session Failed - Invalid stored token`);
-        localStorage.removeItem(TOKEN_KEY);
-      }
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const storedToken = localStorage.getItem('reshop_token');
+    const storedUser = localStorage.getItem('reshop_user');
+    if (storedToken && storedUser) {
+      setToken(storedToken);
+      setUser(JSON.parse(storedUser));
     }
-    return { user: null, role: null, token: null, isAuthenticated: false };
+    setIsLoading(false);
+  }, []);
+
+  const login = (newToken: string, newUser: AuthUser) => {
+    localStorage.setItem('reshop_token', newToken);
+    localStorage.setItem('reshop_user', JSON.stringify(newUser));
+    setToken(newToken);
+    setUser(newUser);
   };
 
-  const [authState, setAuthState] = useState<AuthState>(getInitialState);
-
-  const login = useCallback((token: string) => {
-    try {
-      const decoded = jwtDecode<UserPayload>(token);
-      localStorage.setItem(TOKEN_KEY, token);
-      setAuthState({
-        user: decoded,
-        role: decoded.role,
-        token,
-        isAuthenticated: true,
-      });
-      console.log(`[auth-context]: Login Successful - 200 - User ID: ${decoded.id}, Role: ${decoded.role}`);
-    } catch (error) {
-      console.log(`[auth-context]: Login Failed - Invalid token received`);
-    }
-  }, []);
-
-  const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
-    setAuthState({ user: null, role: null, token: null, isAuthenticated: false });
-    console.log(`[auth-context]: Logout triggered - Session cleared`);
-  }, []);
+  const logout = () => {
+    localStorage.removeItem('reshop_token');
+    localStorage.removeItem('reshop_user');
+    setToken(null);
+    setUser(null);
+  };
 
   return (
-    <AuthContext.Provider value={{ ...authState, login, logout }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, logout, isAuthenticated: !!token }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-// ─── Hook ────────────────────────────────────────────────────────────────
 export const useAuth = (): AuthContextType => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used inside AuthProvider');
+  return ctx;
 };
-
-export default AuthContext;

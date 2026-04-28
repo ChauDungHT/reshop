@@ -83,8 +83,8 @@ const VendorDashboard = () => {
                 <p className="text-sm font-semibold text-slate-200">{order.buyer}</p>
                 <p className="text-xs text-slate-500">{order.id} · {order.items} sản phẩm · {order.time}</p>
               </div>
-              <span className="text-sm font-bold text-emerald-400 flex-shrink-0">{order.amount}</span>
-              <div className="flex gap-2 flex-shrink-0">
+              <span className="text-sm font-bold text-emerald-400 shrink-0">{order.amount}</span>
+              <div className="flex gap-2 shrink-0">
                 <button className="text-xs bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 border border-emerald-600/30 px-3 py-1.5 rounded-lg transition-colors font-semibold">
                   Xác nhận
                 </button>
@@ -107,7 +107,7 @@ const VendorDashboard = () => {
               Có <strong className="text-amber-400">{s.lowStockCount} sản phẩm</strong> sắp hết hàng. Vui lòng nhập kho sớm để tránh ảnh hưởng doanh số.
             </p>
           </div>
-          <button className="ml-auto text-xs bg-amber-600/20 hover:bg-amber-600/40 text-amber-400 border border-amber-600/30 px-3 py-1.5 rounded-lg transition-colors font-semibold flex-shrink-0">
+          <button className="ml-auto text-xs bg-amber-600/20 hover:bg-amber-600/40 text-amber-400 border border-amber-600/30 px-3 py-1.5 rounded-lg transition-colors font-semibold shrink-0">
             Xem ngay
           </button>
         </div>
