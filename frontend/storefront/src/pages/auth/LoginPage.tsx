@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -115,6 +115,13 @@ const LoginPage = () => {
               )}
             </button>
           </form>
+
+          <p className="text-center text-slate-500 text-xs mt-6">
+            Chưa có tài khoản?{' '}
+            <Link to="/register" className="text-indigo-400 font-bold hover:underline">
+              Đăng ký ngay
+            </Link>
+          </p>
         </div>
       </div>
     </div>

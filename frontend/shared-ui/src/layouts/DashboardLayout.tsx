@@ -74,10 +74,10 @@ const DashboardLayout = () => {
               </span>
             </div>
           )}
-          <div className={`flex items-center ${collapsed ? 'h-12 justify-center' : 'px-2 justify-end'}`}>
+          <div className={`flex items-center ${collapsed ? 'h-16 justify-center' : 'px-4 h-12 justify-end'}`}>
             <button
               onClick={() => setCollapsed(!collapsed)}
-              className="p-1.5 rounded-lg hover:bg-slate-800 transition-colors text-slate-400"
+              className="p-2 rounded-lg hover:bg-slate-800 transition-colors text-slate-400 text-xl font-black tracking-tight"
             >
               {collapsed ? '→' : '←'}
             </button>

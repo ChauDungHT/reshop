@@ -1,62 +1,47 @@
 # KẾ HOẠCH LÀM VIỆC - ĐỘI TEST (QA / QC)
-**Module:** 1 — HỆ THỐNG TÀI KHOẢN & PHÂN QUYỀN
+**Module:** 2 — CHỨC NĂNG CUSTOMER (KHÁCH HÀNG)
 
 ---
 
-## 1. Mục Tiêu Test (Test Objectives)
-Đảm bảo luồng đi cơ bản (Happy path) hoạt động trơn tru. Hệ thống phân quyền hoạt động nghiêm ngặt không có lỗ hổng (Ví dụ Vendor không truy cập được link Admin).
+## 1. API Testing (Postman / Automation)
+
+### A. Race Condition & Concurrency (Quan trọng nhất)
+- **Test Case:** Giả lập 10 request đồng thời (Dùng Postman Runner hoặc Script) mua 1 sản phẩm chỉ còn 1 tồn kho.
+- **Kết quả kỳ vọng:** CHỈ 1 người mua thành công (Status 201), 9 người còn lại nhận lỗi `400 Out of stock`. Không được phép âm kho.
+
+### B. Wallet & Transaction
+- **Topup:** Test nạp tiền âm hoặc ký tự lạ (Expected 400).
+- **Checkout:** Thanh toán khi số dư ví thiếu 1đ (Expected 400 + "Insufficient balance").
+- **Refund:** Verify sau khi Admin/Vendor duyệt trả hàng, số tiền phải được cộng lại vào `users.wallet_balance` và ghi log `wallet_transactions` chính xác.
 
 ---
 
-## 2. Test API (Postman / Automation)
+## 2. UI/UX Testing (Manual Test)
 
-### A. Đăng ký & Đăng nhập (Authentication APIs)
-Tạo Collection Postman gọi trực tiếp vào API Server. Chú ý các Case sau:
+### A. Trải Nghiệm Sản Phẩm
+- **Responsive:** Co giãn màn hình để kiểm tra Grid sản phẩm (Desktop: 4 cột, Mobile: 2 cột).
+- **Gray-out:** Sửa `stock=0` trong DB của một sản phẩm đang có trong giỏ hàng. Kiểm tra xem Frontend có làm mờ (gray-out) và không cho chọn item đó không.
+- **URL Params:** Chọn filter "Giá từ 100k-500k", copy URL sang tab ẩn danh. Verify danh sách hiển thị đúng filter đó.
 
-| Tên Test Case | Payload Truyền Vào | Expected (Trạng Thái Kỳ Vọng) |
-|---|---|---|
-| Đăng ký Customer thành công | Email mới, valid password | Success `201 Created` |
-| Đăng ký trùng Email | Email đã có trong DB | Failure `409 Conflict` (Báo trùng) |
-| Đăng ký sai format email/pass | Password 3 ký tự | Failure `400 Bad Request` |
-| Đăng nhập tài khoản Valid | Đúng email, pass | Success `200 OK` + Lấy được chuỗi JWT |
-| Đăng nhập sai Pass | Đúng email, sai pass | Failure `401 Unauthorized` |
-| Đăng nhập User bị Banned | Acc đã set `status=banned` | Failure `403 Forbidden` |
-
-### B. Kiểm Tra Phân Quyền (Authorization APIs)
-Yêu cầu: Lấy Token từ file Postman Enviroment Set để truyền vào Header `Authorization: Bearer <token>`.
-
-| Tên Test Case | Chuẩn Bị Token | Action & Expected |
-|---|---|---|
-| Lấy Profile khi không đính Token | Không set Token | Return `401 Unauthorized` |
-| Truy cập API Admin bằng Customer Token | Token có Role = `customer` | Gọi `/api/admin/...` -> Return `403 Forbidden` |
-| Change Password đúng / sai | Token hợp lệ | Cung cấp Mật khẩu cũ sai -> Dữ liệu trả lỗi. Cung cấp đúng -> Success. |
+### B. Quy Trình Trả Hàng (Return Policy)
+- **Thời hạn 7 ngày:** Test đơn hàng đã giao quá 7 ngày -> Nút "Yêu cầu trả hàng" phải ẩn.
+- **Số lượng tối đa:** Mua 3 cái, yêu cầu trả 4 cái -> Hệ thống phải báo lỗi.
 
 ---
 
-## 3. Test Giao Diện và UI/UX (Manual Test trên Trình Duyệt)
+## 3. Bảo Mật & Phân Quyền (Security)
 
-Đội QC mở trình duyệt web lên và test bằng các Scenario dựa trên hành vi người dùng:
+| Chức năng | Phân quyền kỳ vọng |
+|---|---|
+| **Đánh giá** | Chỉ User đã mua SP (status=delivered) mới được gửi review. |
+| **Q&A - Xóa câu hỏi** | Chỉ Người đặt câu hỏi hoặc Admin mới có quyền xóa. |
+| **Q&A - Trả lời** | Chỉ Vendor đại diện cho sản phẩm đó mới được trả lời. |
+| **Wallet History** | Không ai được xem lịch sử ví của người khác qua API. |
 
-### A. Luồng Đăng ký (Sign Up Form Validation)
-- Để trống tất cả các ô chọn Submit → Kết quả mong muốn: Form báo lỗi đỏ (như required field) không hề tải lại trang/gọi API.
-- Nhập Password Confirm không giống với Password → Kết quả: Nút Submit bị disable hoặc hiện thông báo realtime "Mật khẩu không khớp".
-- Kiểm tra tính năng che/hiện (Eye icon) ở ô Mật khẩu.
+---
 
-### B. Luồng Nhận diện Phân quyền & Route Bảo Vệ
-- **Test Chưa Đăng Nhập:** Copy URL `/dashboard/customer` và Paste vào thanh địa chỉ. → Kết quả: Web tự động hất văng về trang `/login`. 
-- **Test Chuyển Hướng Login:** 
-  1. Đăng nhập user là `role=customer`.
-  2. Bấm Login thành công.
-  3. Quan sát: Dashboard phải chuyển đúng vào giao diện của người mua (`/dashboard/customer`).
-- **Test Chống Xuyên Quyền Trình Duyệt:** 
-  1. Đang là user `Customer`. Gõ thẳng lên thanh địa chỉ `/dashboard/admin`. 
-  2. Mong muốn: Màn hình báo "403 - Bạn không có quyền truy cập trang này".
-- **Test Logout:** Nhấn nút Logout. -> Kiểm tra localStorage xem Key `token` đã bốc hơi chưa.
-
-### C. Luồng Vendor Verification
-- **Test trạng thái Pending:** Đăng ký Vendor mới, tiến hành login bằng tài khoản này. -> Mong muốn: Load vào trang báo hiệu lệnh "Tài khoản của bạn đang chờ phê duyệt" / Bị chặn không cho thấy biểu đồ hay sản phẩm dashboard nội bộ shop.
-- Đăng nhập quyền Admin tiến hành duyệt Shop (Sang Module 4). Đăng nhập lại Shop, lúc này các chức năng sẽ hiển thị đầy đủ.
-
-### D. File Avatar Upload
-- Đổi ảnh nhỏ hơn 5MB (Bình thường).
-- Ném một file ảnh 20MB hoặc tệp .pdf -> Front end / Backend phải chửi thẳng lỗi File Type hoặc File Size.
+## 4. Quy Ước Lỗi (Error Codes)
+Thống nhất các mã lỗi đặc thù:
+- `ERR_OUT_OF_STOCK`: Hết hàng khi đang checkout.
+- `ERR_PRICE_CHANGED`: Giá sản phẩm thay đổi quá lớn so với lúc bỏ vào giỏ.
+- `ERR_TRANSACTION_FAILED`: Lỗi database rollback do tranh chấp tài nguyên.

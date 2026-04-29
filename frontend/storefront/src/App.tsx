@@ -8,6 +8,7 @@ import DashboardLayout from '../../shared-ui/src/layouts/DashboardLayout';
 
 // Pages
 import LoginPage from './pages/auth/LoginPage';
+import RegisterPage from './pages/auth/RegisterPage';
 import CustomerDashboard from './pages/dashboard/CustomerDashboard';
 import VendorDashboard from './pages/dashboard/VendorDashboard';
 import AdminDashboard from './pages/dashboard/AdminDashboard';
@@ -30,6 +31,7 @@ const App = () => {
     <Routes>
       {/* Public */}
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
       <Route path="/forbidden" element={<ForbiddenPage />} />
 
       {/* Protected — tất cả user đã login */}

@@ -1,17 +1,25 @@
-const fs = require('fs');
-const path = require('path');
-const db = require('../src/core/db');
+const fs = require("fs");
+const path = require("path");
+const { Pool } = require("pg");
+require("dotenv").config();
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
 async function runMigration() {
-  const schemaPath = path.join(__dirname, 'schema.sql');
+  const schemaPath = path.join(__dirname, "schema.sql");
   try {
-    const schemaSql = fs.readFileSync(schemaPath, 'utf8');
-    await db.query(schemaSql);
-    console.log('Migration completed successfully.');
+    const schemaSql = fs.readFileSync(schemaPath, "utf8");
+    await pool.query(schemaSql);
+    console.log(
+      "[database]: Migration completed successfully at " +
+        new Date().toISOString(),
+    );
   } catch (err) {
-    console.error('Error during migration:', err);
+    console.error("[database]: Error during migration:", err);
   } finally {
-    db.pool.end();
+    pool.end();
   }
 }
 
