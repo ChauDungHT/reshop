@@ -5,6 +5,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import PrivateRoute from '../../shared-ui/src/components/PrivateRoute';
 import RoleRoute from '../../shared-ui/src/components/RoleRoute';
 import DashboardLayout from '../../shared-ui/src/layouts/DashboardLayout';
+import StorefrontLayout from '../../shared-ui/src/layouts/StorefrontLayout';
 
 // Pages
 import LoginPage from './pages/auth/LoginPage';
@@ -29,7 +30,13 @@ const DashboardRouter = () => {
 const App = () => {
   return (
     <Routes>
-      {/* Public */}
+      {/* Public Storefront (không cần đăng nhập) */}
+      <Route element={<StorefrontLayout />}>
+        <Route path="/" element={<ShopPage />} />
+        <Route path="/shop" element={<ShopPage />} />
+      </Route>
+
+      {/* Auth */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/forbidden" element={<ForbiddenPage />} />
@@ -37,12 +44,11 @@ const App = () => {
       {/* Protected — tất cả user đã login */}
       <Route element={<PrivateRoute />}>
         <Route element={<DashboardLayout />}>
-          
+
           <Route path="/dashboard" element={<DashboardRouter />} />
 
           {/* Customer */}
           <Route element={<RoleRoute allowedRoles={['customer']} />}>
-            <Route path="/shop" element={<ShopPage />} />
             <Route path="/account" element={<AccountPage />} />
           </Route>
 
@@ -51,9 +57,7 @@ const App = () => {
         </Route>
       </Route>
 
-      {/* Default redirect: nếu cố vào các link linh tinh, đẩy về dashboard (PrivateRoute sẽ lo việc đá ra login nếu chưa đăng nhập) */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };

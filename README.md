@@ -84,8 +84,10 @@ Nằm trong `backend/package.json`:
 Email: admin@reshop.vn
 Mật khẩu: admin123@<>
 
-Email Vendor (Nhà bán hàng): vendor@reshop.vn
-Mật khẩu: vendorpass123
+Email Vendor (Nhà bán hàng): contact@caulongstore.com
+Mật khẩu: password123
 
-Email Customer (Khách hàng): dungtest@example.com
-Mật khẩu: securePassword123
+Email Customer (Khách hàng): acerikyl@gmail.com
+Mật khẩu: dung123xzx
+
+
