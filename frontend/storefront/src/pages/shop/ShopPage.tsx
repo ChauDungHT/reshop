@@ -1,6 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import axiosInstance from '../../../../shared-ui/src/lib/axios';
+import { Link, useSearchParams } from 'react-router-dom';
+import { useDebounce } from '../../../../shared-ui/src/hooks/useDebounce';
+import axiosInstance, { BASE_URL } from '../../../../shared-ui/src/lib/axios';
 
 interface Category {
   id: string;
@@ -34,9 +36,13 @@ const PLACEHOLDER_IMG = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000
 const formatPrice = (value: number) => `${value.toLocaleString('vi-VN')}₫`;
 
 const ProductCard = ({ product }: { product: Product }) => {
-  const imgSrc = product.image_urls?.[0] ?? PLACEHOLDER_IMG;
+  const rawImg = product.image_urls?.[0];
+  const imgSrc = rawImg 
+    ? (rawImg.startsWith('http') ? rawImg : `${BASE_URL}${rawImg}`) 
+    : PLACEHOLDER_IMG;
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-700 hover:shadow-lg cursor-pointer">
+    <Link to={`/product/${product.id}`} className="block h-full">
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-700 hover:shadow-lg cursor-pointer h-full">
       <div className="aspect-square bg-slate-800 relative overflow-hidden">
         <img
           src={imgSrc}
@@ -66,8 +72,9 @@ const ProductCard = ({ product }: { product: Product }) => {
             <span className="text-slate-500 text-xs line-through">{formatPrice(product.originalPrice)}</span>
           )}
         </div>
+        </div>
       </div>
-    </div>
+    </Link>
   );
 };
 
@@ -83,16 +90,56 @@ const SkeletonCard = () => (
 );
 
 const ShopPage = () => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState('latest');
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [ratingFilter, setRatingFilter] = useState(0);
-  const [minPrice, setMinPrice] = useState(0);
-  const [maxPrice, setMaxPrice] = useState(10000000);
-  const [page, setPage] = useState(1);
+  const [searchParams, setSearchParams] = useSearchParams();
+  
+  const [searchInput, setSearchInput] = useState(searchParams.get('q') || '');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const debouncedSearch = useDebounce(searchInput, 300);
+  const productListRef = React.useRef<HTMLDivElement>(null);
+
+  const sortBy = searchParams.get('sort') || 'latest';
+  const selectedCategory = searchParams.get('category') || '';
+  const minPrice = parseInt(searchParams.get('min_price') || '0', 10);
+  const maxPrice = parseInt(searchParams.get('max_price') || '10000000', 10);
+  const page = parseInt(searchParams.get('page') || '1', 10);
+  const ratingFilter = parseInt(searchParams.get('rating') || '0', 10);
   const limit = 12;
 
-  // Fetch categories từ API
+  const updateFilters = (newFilters: Record<string, string | number | undefined>) => {
+    const nextParams = new URLSearchParams(searchParams);
+    Object.entries(newFilters).forEach(([key, value]) => {
+      if (value === undefined || value === '' || value === 0 || (key === 'max_price' && value === 10000000)) {
+        nextParams.delete(key);
+      } else {
+        nextParams.set(key, String(value));
+      }
+    });
+    if (!newFilters.page) nextParams.set('page', '1');
+    setSearchParams(nextParams);
+  };
+
+  useEffect(() => {
+    const currentQ = searchParams.get('q') || '';
+    if (debouncedSearch !== currentQ) {
+      updateFilters({ q: debouncedSearch });
+    }
+    if (debouncedSearch.length >= 2) {
+      setShowSuggestions(true);
+    } else {
+      setShowSuggestions(false);
+    }
+  }, [debouncedSearch]);
+
+  const suggestionsQuery = useQuery({
+    queryKey: ['suggestions', debouncedSearch],
+    queryFn: async () => {
+      if (!debouncedSearch || debouncedSearch.length < 2) return [];
+      const response = await axiosInstance.get(`/products?q=${debouncedSearch}&limit=5`);
+      return response.data.data.products as Product[];
+    },
+    enabled: debouncedSearch.length >= 2,
+  });
+
   const categoriesQuery = useQuery({
     queryKey: ['categories'],
     queryFn: async () => {
@@ -101,43 +148,37 @@ const ShopPage = () => {
       console.log('[shop]: Categories fetched - 200');
       return categories;
     },
-    staleTime: 10 * 60 * 1000, // 10 phút
+    staleTime: 10 * 60 * 1000,
   });
 
   const categories = categoriesQuery.data ?? [];
-  // Chỉ hiển thị danh mục cha (parent_id === null)
   const parentCategories = categories.filter((c) => c.parent_id === null);
 
-  // Featured products
   const featuredQuery = useQuery({
     queryKey: ['featured-products'],
     queryFn: async () => {
       const params = new URLSearchParams({ is_featured: 'true', limit: '8', sort: 'latest' });
       const response = await axiosInstance.get(`/products?${params}`);
       const products = response.data.data.products as Product[];
-      console.log('[shop]: Featured products fetched - 200 - [is_featured=true]');
       return products;
     },
   });
 
-  // Latest products
   const latestQuery = useQuery({
     queryKey: ['latest-products'],
     queryFn: async () => {
       const params = new URLSearchParams({ limit: '8', sort: 'latest' });
       const response = await axiosInstance.get(`/products?${params}`);
       const products = response.data.data.products as Product[];
-      console.log('[shop]: Latest products fetched - 200 - [8 newest products]');
       return products;
     },
   });
 
-  // Product listing với filters
   const listingQuery = useQuery({
-    queryKey: ['products', searchQuery, sortBy, selectedCategory, ratingFilter, minPrice, maxPrice, page],
+    queryKey: ['products', debouncedSearch, sortBy, selectedCategory, minPrice, maxPrice, page],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (searchQuery) params.append('q', searchQuery);
+      if (debouncedSearch) params.append('q', debouncedSearch);
       if (sortBy) params.append('sort', sortBy);
       if (minPrice > 0) params.append('min_price', String(minPrice));
       if (maxPrice < 10000000) params.append('max_price', String(maxPrice));
@@ -147,14 +188,13 @@ const ShopPage = () => {
 
       const response = await axiosInstance.get(`/products?${params}`);
       const data = response.data.data as { products: Product[]; total: number; page: number; limit: number };
-      console.log('[shop]: Product listing fetched - 200 - [Catalog query completed]');
+      console.log('[shop]: Product listing fetched - 200');
       return data;
     },
   });
 
-  const listingData = listingQuery.data;
-  const products = listingData?.products ?? [];
-  const total = listingData?.total ?? 0;
+  const products = listingQuery.data?.products ?? [];
+  const total = listingQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const featuredProducts = featuredQuery.data;
   const latestProducts = latestQuery.data;
@@ -168,7 +208,10 @@ const ShopPage = () => {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    setPage(1);
+    setShowSuggestions(false);
+    updateFilters({ q: searchInput });
+    // Scroll to results
+    productListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   return (
@@ -185,11 +228,11 @@ const ShopPage = () => {
               Khám phá sản phẩm nổi bật và mới nhất trên Reshop. Lọc theo danh mục, giá, sao và tìm ra lựa chọn phù hợp chỉ trong vài giây.
             </p>
             {/* Search bar */}
-            <form onSubmit={handleSearch} className="flex gap-2 max-w-lg">
+            <form onSubmit={handleSearch} className="flex gap-2 max-w-lg relative">
               <input
                 type="text"
-                value={searchQuery}
-                onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Tìm kiếm sản phẩm..."
                 className="flex-1 rounded-full border border-slate-700 bg-slate-900 px-5 py-3 text-sm text-slate-100 placeholder-slate-500 outline-none focus:border-indigo-500"
               />
@@ -199,6 +242,30 @@ const ShopPage = () => {
               >
                 Tìm
               </button>
+
+              {/* Suggestions Dropdown */}
+              {showSuggestions && suggestionsQuery.data && suggestionsQuery.data.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 rounded-3xl bg-slate-900 border border-slate-700 shadow-2xl overflow-hidden z-50">
+                  {suggestionsQuery.data.map((p) => (
+                    <div
+                      key={p.id}
+                      onClick={() => {
+                        setSearchInput(p.name);
+                        setShowSuggestions(false);
+                        updateFilters({ q: p.name });
+                        productListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }}
+                      className="px-5 py-3 hover:bg-slate-800 cursor-pointer flex items-center justify-between border-b border-slate-800 last:border-0"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-slate-500">🔍</span>
+                        <span className="text-sm text-slate-200">{p.name}</span>
+                      </div>
+                      <span className="text-xs text-emerald-400 font-bold">{formatPrice(p.price)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </form>
           </div>
           <div className="rounded-4xl border border-white/10 bg-slate-950/70 p-6 shadow-inner">
@@ -224,7 +291,7 @@ const ShopPage = () => {
             Có {featuredProducts?.length ?? 0} sản phẩm nổi bật
           </span>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {featuredQuery.isLoading
             ? Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
             : (featuredProducts ?? []).length > 0
@@ -248,7 +315,7 @@ const ShopPage = () => {
             {latestProducts ? `${latestProducts.length} sản phẩm` : '...'}
           </span>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {latestQuery.isLoading
             ? Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
             : (latestProducts ?? []).map((p) => <ProductCard key={p.id} product={p} />)}
@@ -256,12 +323,22 @@ const ShopPage = () => {
       </section>
 
       {/* Catalog: Filter + Listing */}
-      <section className="grid gap-6 xl:grid-cols-[300px_1fr]">
+      <section className="grid gap-6 lg:grid-cols-[280px_1fr]">
         {/* Sidebar filter */}
         <aside className="rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-lg h-fit">
           <div className="space-y-5">
             <div>
-              <h3 className="text-lg font-bold text-slate-100">Bộ lọc</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-slate-100">Bộ lọc</h3>
+                {(selectedCategory || minPrice > 0 || maxPrice < 10000000 || ratingFilter > 0) && (
+                  <button 
+                    onClick={() => updateFilters({ category: '', min_price: 0, max_price: 10000000, rating: 0, page: 1 })}
+                    className="text-xs font-semibold text-rose-400 hover:text-rose-300 transition"
+                  >
+                    Xóa bộ lọc
+                  </button>
+                )}
+              </div>
               <p className="text-sm text-slate-500">Lọc theo danh mục, giá và đánh giá sao.</p>
             </div>
 
@@ -281,7 +358,7 @@ const ShopPage = () => {
                       type="radio"
                       name="category"
                       checked={selectedCategory === ''}
-                      onChange={() => { setSelectedCategory(''); setPage(1); }}
+                      onChange={() => updateFilters({ category: '' })}
                       className="h-4 w-4 border-slate-700 bg-slate-800 text-indigo-500 focus:ring-indigo-500"
                     />
                     <span>Tất cả</span>
@@ -292,7 +369,7 @@ const ShopPage = () => {
                         type="radio"
                         name="category"
                         checked={selectedCategory === cat.slug}
-                        onChange={() => { setSelectedCategory(cat.slug); setPage(1); }}
+                        onChange={() => updateFilters({ category: cat.slug })}
                         className="h-4 w-4 border-slate-700 bg-slate-800 text-indigo-500 focus:ring-indigo-500"
                       />
                       <span>{cat.name}</span>
@@ -310,7 +387,7 @@ const ShopPage = () => {
                   type="number"
                   value={minPrice}
                   min={0}
-                  onChange={(e) => { setMinPrice(Number(e.target.value)); setPage(1); }}
+                  onChange={(e) => updateFilters({ min_price: Number(e.target.value) })}
                   className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 outline-none focus:border-indigo-500"
                   placeholder="Giá từ"
                 />
@@ -318,7 +395,7 @@ const ShopPage = () => {
                   type="number"
                   value={maxPrice}
                   min={0}
-                  onChange={(e) => { setMaxPrice(Number(e.target.value)); setPage(1); }}
+                  onChange={(e) => updateFilters({ max_price: Number(e.target.value) })}
                   className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 outline-none focus:border-indigo-500"
                   placeholder="Giá đến"
                 />
@@ -335,7 +412,7 @@ const ShopPage = () => {
                       type="radio"
                       name="rating"
                       checked={ratingFilter === option.value}
-                      onChange={() => setRatingFilter(option.value)}
+                      onChange={() => updateFilters({ rating: option.value })}
                       className="h-4 w-4 border-slate-700 bg-slate-800 text-indigo-500 focus:ring-indigo-500"
                     />
                     <span>{option.label}</span>
@@ -346,7 +423,7 @@ const ShopPage = () => {
                     type="radio"
                     name="rating"
                     checked={ratingFilter === 0}
-                    onChange={() => setRatingFilter(0)}
+                    onChange={() => updateFilters({ rating: 0 })}
                     className="h-4 w-4 border-slate-700 bg-slate-800 text-indigo-500 focus:ring-indigo-500"
                   />
                   <span>Tất cả</span>
@@ -357,7 +434,7 @@ const ShopPage = () => {
         </aside>
 
         {/* Product listing */}
-        <div className="space-y-6">
+        <div ref={productListRef} className="space-y-6 scroll-mt-10">
           {/* Toolbar */}
           <div className="flex flex-col gap-3 rounded-3xl border border-white/10 bg-slate-900 p-5 shadow-lg sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -368,7 +445,7 @@ const ShopPage = () => {
               {/* Sort */}
               <select
                 value={sortBy}
-                onChange={(e) => { setSortBy(e.target.value); setPage(1); }}
+                onChange={(e) => updateFilters({ sort: e.target.value })}
                 className="rounded-2xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 outline-none focus:border-indigo-500"
               >
                 <option value="latest">Mới nhất</option>
@@ -378,14 +455,14 @@ const ShopPage = () => {
               </select>
               {/* Pagination */}
               <button
-                onClick={() => setPage((c) => Math.max(1, c - 1))}
+                onClick={() => updateFilters({ page: page - 1 })}
                 disabled={page <= 1}
                 className="rounded-2xl bg-slate-800 px-4 py-2 text-sm text-slate-300 transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 ← Trước
               </button>
               <button
-                onClick={() => setPage((c) => Math.min(totalPages, c + 1))}
+                onClick={() => updateFilters({ page: page + 1 })}
                 disabled={page >= totalPages}
                 className="rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -396,7 +473,7 @@ const ShopPage = () => {
 
           {/* Grid */}
           {listingQuery.isLoading ? (
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
               {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)}
             </div>
           ) : displayProducts.length === 0 ? (
@@ -406,7 +483,7 @@ const ShopPage = () => {
               <p className="text-sm mt-1">Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
               {displayProducts.map((product) => (
                 <ProductCard key={product.id} product={product} />
               ))}

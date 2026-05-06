@@ -1,23 +1,23 @@
-Dưới đây là chi tiết các trường cần chuẩn bị cùng ví dụ thực tế cho một shop cầu lông:
+# SKILL: DATABASE SYNCHRONIZATION
+**Purpose:** This file acts as the "Source of Truth" for shop data, categories, and inventory. 
+**Instructions for Agent:** 
+1. When a user asks to "sync database" or "update inventory", read this file.
+2. Run `npm run db:sync` in the backend directory to apply these changes.
+3. Verify that the database reflects the data in the tables below.
 
-### 1. Dữ liệu Tài khoản Chủ shop (`users` table)
-Mỗi shop cần một tài khoản user đóng vai trò là chủ cửa hàng.
-* **name**: Tên chủ shop (VD: *Nguyễn Văn A*).
-* **email**: Email đăng nhập (VD: *contact@caulongstore.com*).
-* **password_hash**: Mật khẩu đã được mã hóa (Bcrypt/Argon2).
-* **role**: `vendor` (Bắt buộc phải set khác với default 'customer').
-* **status**: `active`.
-* **phone**: Số điện thoại liên hệ (VD: *0987654321*).
-* **address**: Địa chỉ shop (VD: *123 Lê Lợi, TP. Vinh, Nghệ An*).
+---
 
-### 2. Dữ liệu Thông tin Cửa hàng (`vendors` table)
-Liên kết trực tiếp với `user_id` ở trên.
-* **store_name**: Tên hiển thị của shop (VD: *VNB Sports Vinh* hoặc *Tiến Minh Badminton*).
-* **slug**: Đường dẫn tĩnh (VD: *vnb-sports-vinh*).
-* **status**: `active` (thay vì default 'inactive' để shop có thể bán ngay).
-* **commission_rate**: Tỉ lệ hoa hồng sàn thu (VD: `5.0` tương đương 5%).
-* **bank_info**: Cấu trúc JSON chứa thông tin nhận tiền.
-    * *Ví dụ JSON*: `{"bank": "Vietcombank", "account_no": "1012345678", "owner": "NGUYEN VAN A"}`
+## 1. Dữ liệu Tài khoản Chủ shop (`users` table)
+* **name**: Nguyễn Văn B
+* **email**: contact2@caulongstore.com
+* **phone**: 0987654321
+* **address**: 123 Lê Lợi, TP. Vinh, Nghệ An
+
+## 2. Dữ liệu Thông tin Cửa hàng (`vendors` table)
+* **store_name**: Cầu Lông Pro
+* **slug**: cau-long-pro
+* **commission_rate**: 5.0
+* **bank_info**: `{"bank": "Vietcombank", "account_no": "1012345678", "owner": "NGUYEN VAN B"}`
 
 Dưới đây là danh sách **10 mặt hàng cầu lông** được chuẩn hóa theo cấu trúc dữ liệu bạn yêu cầu, bao gồm đầy đủ thông tin về danh mục, thông số kỹ thuật và tồn kho.
 
@@ -43,7 +43,7 @@ Dưới đây là 10 sản phẩm (tập trung vào vợt) để bạn đưa và
 
 | STT | Tên sản phẩm (Name) | Mô tả (Description - Thông số kỹ thuật) | Giá (Price) | Tồn kho (Stock) | Danh mục |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| 1 | **Yonex Astrox 88D Pro (Gen 3)** | Trọng lượng: 4U, Cán: G5. Điểm cân bằng: Nặng đầu. Sức căng: 28lbs. Công nghệ: Rotational Generator System. | 4,250,000 | 25 | Vợt Yonex |
+| 1 | **Yonex Astrox 88D Pro (Gen 3)** | Trọng lượng: 4U, Cán: G5. Điểm cân bằng: Nặng đầu. Sức căng: 28lbs. Công nghệ: Rotational Generator System. | 4,250,000 | 50 | Vợt Yonex |
 | 2 | **Yonex Nanoflare 1000Z** | Trọng lượng: 4U, Cán: G5. Dòng vợt siêu tốc độ, thân cứng, đầu cân bằng. Phù hợp đánh đôi, phản tạt. | 4,100,000 | 15 | Vợt Yonex |
 | 3 | **Lining Axforce 80** | Trọng lượng: 3U/4U. Thân vợt linh hoạt, thiên công mạnh mẽ. Sức căng tối đa: 30lbs. | 3,850,000 | 12 | Vợt Lining |
 | 4 | **Lining Halbertec 8000** | Trọng lượng: 4U, Cán: G5. Dòng vợt kiểm soát cầu toàn diện, cân bằng giữa công và thủ. | 3,700,000 | 20 | Vợt Lining |

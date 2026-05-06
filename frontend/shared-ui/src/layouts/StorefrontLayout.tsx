@@ -1,9 +1,21 @@
+import React, { useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useCart } from '../context/CartContext';
 
 const StorefrontLayout = () => {
   const { user, logout } = useAuth();
+  const { cartItems } = useCart();
   const navigate = useNavigate();
+
+  // Chặn Vendor và Admin truy cập Storefront
+  useEffect(() => {
+    if (user && (user.role === 'vendor' || user.role === 'admin')) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user, navigate]);
+
+  const cartCount = cartItems.length;
 
   const handleLogout = () => {
     logout();
@@ -34,39 +46,61 @@ const StorefrontLayout = () => {
             </NavLink>
           </nav>
 
-          {/* Auth buttons */}
-          <div className="flex items-center gap-3">
-            {user ? (
-              <>
-                <NavLink
-                  to="/dashboard"
-                  className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
-                >
-                  Quản lý
-                </NavLink>
-                <button
-                  onClick={handleLogout}
-                  className="rounded-full border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800"
-                >
-                  Đăng xuất
-                </button>
-              </>
-            ) : (
-              <>
-                <NavLink
-                  to="/login"
-                  className="rounded-full border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800"
-                >
-                  Đăng nhập
-                </NavLink>
-                <NavLink
-                  to="/register"
-                  className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
-                >
-                  Đăng ký
-                </NavLink>
-              </>
-            )}
+          {/* Right side: Cart & Auth */}
+          <div className="flex items-center gap-4">
+            {/* Cart Button */}
+            <NavLink
+              to="/cart"
+              className={({ isActive }) =>
+                `group relative flex h-10 w-10 items-center justify-center rounded-full border border-slate-800 transition-all hover:bg-slate-900 ${
+                  isActive ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400' : 'text-slate-400 hover:text-slate-200'
+                }`
+              }
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+              </svg>
+              {cartCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white ring-2 ring-slate-950 transition-transform group-hover:scale-110">
+                  {cartCount}
+                </span>
+              )}
+            </NavLink>
+
+            {/* Auth buttons */}
+            <div className="flex items-center gap-3">
+              {user ? (
+                <>
+                  <NavLink
+                    to="/dashboard"
+                    className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
+                  >
+                    Quản lý
+                  </NavLink>
+                  <button
+                    onClick={handleLogout}
+                    className="rounded-full border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800"
+                  >
+                    Đăng xuất
+                  </button>
+                </>
+              ) : (
+                <>
+                  <NavLink
+                    to="/login"
+                    className="rounded-full border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800"
+                  >
+                    Đăng nhập
+                  </NavLink>
+                  <NavLink
+                    to="/register"
+                    className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
+                  >
+                    Đăng ký
+                  </NavLink>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </header>

@@ -1,5 +1,10 @@
 const bcrypt = require('bcrypt');
-const db = require('../../src/core/db');
+const { Pool } = require('pg');
+require('dotenv').config();
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
 async function seedAdmin() {
   const args = process.argv.slice(2);
@@ -31,7 +36,7 @@ async function seedAdmin() {
     `;
     const values = ['Admin User', email, passwordHash, 'admin'];
 
-    const res = await db.query(query, values);
+    const res = await pool.query(query, values);
     console.log('Tạo tài khoản Admin thành công:', res.rows[0]);
   } catch (err) {
     if (err.code === '23505') { // unique violation
@@ -40,7 +45,7 @@ async function seedAdmin() {
       console.error('Lỗi khi tạo admin:', err);
     }
   } finally {
-    db.pool.end();
+    pool.end();
   }
 }
 

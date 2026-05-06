@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import axiosInstance from '../lib/axios';
 
 export type UserRole = 'customer' | 'vendor' | 'admin';
 
@@ -8,6 +9,9 @@ export interface AuthUser {
   email: string;
   role: UserRole;
   avatar?: string;
+  wallet_balance: number;
+  phone?: string;
+  address?: string;
 }
 
 interface AuthContextType {
@@ -43,11 +47,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(newUser);
   };
 
-  const logout = () => {
-    localStorage.removeItem('reshop_token');
-    localStorage.removeItem('reshop_user');
-    setToken(null);
-    setUser(null);
+  const logout = async () => {
+    try {
+      await axiosInstance.post('/auth/logout');
+    } catch (err) {
+      console.error('Logout error on server:', err);
+    } finally {
+      localStorage.removeItem('reshop_token');
+      localStorage.removeItem('reshop_user');
+      setToken(null);
+      setUser(null);
+    }
   };
 
   return (

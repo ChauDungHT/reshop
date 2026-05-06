@@ -15,6 +15,9 @@ import VendorDashboard from './pages/dashboard/VendorDashboard';
 import AdminDashboard from './pages/dashboard/AdminDashboard';
 import AccountPage from './pages/account/AccountPage';
 import ShopPage from './pages/shop/ShopPage';
+import ProductDetailPage from './pages/shop/ProductDetailPage';
+import CartPage from './pages/shop/CartPage';
+import CheckoutPage from './pages/shop/CheckoutPage';
 import ForbiddenPage from './pages/error/ForbiddenPage';
 
 import { useAuth } from '../../shared-ui/src/context/AuthContext';
@@ -34,6 +37,8 @@ const App = () => {
       <Route element={<StorefrontLayout />}>
         <Route path="/" element={<ShopPage />} />
         <Route path="/shop" element={<ShopPage />} />
+        <Route path="/product/:id" element={<ProductDetailPage />} />
+        <Route path="/cart" element={<CartPage />} />
       </Route>
 
       {/* Auth */}
@@ -43,6 +48,10 @@ const App = () => {
 
       {/* Protected — tất cả user đã login */}
       <Route element={<PrivateRoute />}>
+        <Route element={<StorefrontLayout />}>
+          <Route path="/checkout" element={<CheckoutPage />} />
+        </Route>
+
         <Route element={<DashboardLayout />}>
 
           <Route path="/dashboard" element={<DashboardRouter />} />

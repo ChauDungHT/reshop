@@ -8,6 +8,7 @@ export interface AuthPayload {
   vendor_id?: string | null;
 }
 
+ 
 declare global {
   namespace Express {
     interface Request {

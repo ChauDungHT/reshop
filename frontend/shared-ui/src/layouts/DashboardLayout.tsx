@@ -12,14 +12,12 @@ interface NavItem {
 const navByRole: Record<UserRole, NavItem[]> = {
   customer: [
     { label: 'Tổng quan', path: '/dashboard', icon: '⊞' },
-    { label: 'Đơn hàng', path: '/orders', icon: '📦' },
     { label: 'Cửa hàng', path: '/shop', icon: '🛍' },
     { label: 'Tài khoản', path: '/account', icon: '👤' },
   ],
   vendor: [
     { label: 'Dashboard', path: '/dashboard', icon: '📊' },
     { label: 'Sản phẩm', path: '/products', icon: '🗂' },
-    { label: 'Đơn hàng', path: '/orders', icon: '📋' },
     { label: 'Tài chính', path: '/finance', icon: '💰' },
   ],
   admin: [

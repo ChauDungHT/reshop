@@ -5,16 +5,16 @@
 
 ---
 
-## 1. TECH STACK CHUẨN MỰC
+## 1. TECH STACK
 Bất cứ giải pháp sinh code nào cũng phải ưu tiên sử dụng tập công nghệ lõi này trừ khi có yêu cầu khác:
-- **Backend**: Node.js (kiến trúc Modular Monolith), Framework Express (hoặc Fastify), PostgreSQL cho Database. Không sử dụng MongoDB / NoSQL.
-- **Frontend**: React.js kết hợp Vite. Styling bằng Tailwind CSS. Quản lý trạng thái bằng React Context (tránh cài thêm Redux nếu chưa thực sự cần thiết).
+- **Backend**: Node.js (kiến trúc Modular Monolith), PostgreSQL cho Database.
+- **Frontend**: React.js kết hợp Vite. Styling bằng Tailwind CSS. Quản lý trạng thái bằng React Context.
 - **Communication & Real-time**: Axios API Client, Socket.IO.
-- **File Upload**: Sử dụng Local Disk (với `multer` + `sharp`), trỏ public folder `/uploads`. Không gọi dịch vụ Cloud ngoại trừ khi có yêu cầu chuyển đổi.
+- **File Upload**: Sử dụng Local Disk (với `multer` + `sharp`), trỏ public folder `/uploads`.
 
 ---
 
-## 2. QUY TẮC CẤU TRÚC FOLDER (Dựa theo `structure.md`)
+## 2. QUY TẮC CẤU TRÚC (Dựa theo `structure.md`)
 Hệ thống KHÔNG code theo kiểu kiến trúc MVC truyền thống tách rời ngang (controllers/ models/ routes/ ở root) mà phải code theo kiểu **Domain-Driven Design (Modular Monolith)**.
 - **Backend (`backend/src/modules/`)**: Code chức năng thuộc về domain nào thì nhét chung vào folder đó: `identity` (auth), `catalog` (product/review), `vendor`, `order` (checkout), `message` (chat), `wallet`, `notif`. Mỗi module tự kiểm soát Route và Service của nó.
 - **Frontend (`frontend/`)**: UI được chia thành 3 mảng Web Độc Lập cho 3 Role sử dụng:

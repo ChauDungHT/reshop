@@ -1,6 +1,11 @@
 # prompt thực thi các bước:
 ```
-bạn được phép yêu cầu các công cụ cần thiết để tôi xem xét nhưng trong khuôn khổ của @contextScopeItemMention để thực thi yêu cầu trong file @contextScopeItemMention, trong khi lên kế hoạch thì kèm theo quy tắc ghi log trong file @contextScopeItemMention và tuân thủ cấu trúc trông file @contextScopeItemMention và sử dụng các test trong @contextScopeItemMention để kiểm tra
+bạn được phép yêu cầu các công cụ cần thiết để thực thi yêu cầu trong file @contextScopeItemMention, luôn luôn đặt tên các file làm việc theo mẫu `scratch-*.js` kiểm tra quan hệ trong @contextScopeItemMentionvà sử dụng các test trong @contextScopeItemMentionđể kiểm tra và cập nhật vào @contextScopeItemMention, chạy `rm scratch-*.js` sau khi hoàn thành
+```
+
+# hoặc:
+```
+tiến hành @contextScopeItemMention và cập nhật vào @task.md, xóa @contextScopeItemMention sau khi hoàn thành
 ```
 
 # prompt yêu cầu chia nhỏ các file backendteam, frontendteam, testteam:
@@ -26,4 +31,13 @@ Test UI/UX: Kiểm tra Validation form, hiển thị thông báo lỗi, kiểm t
 Thống kê các dữ liệu mà Backend và Frontend cần thống nhất trước (Ví dụ: Cấu trúc object User trả về trong JWT).
 
 Dưới đây là nội dung Module:
+```
+
+```
+server đã được chạy, các tài khoản để login nằm ở @contextScopeItemMention, thực thi các bài test trong @contextScopeItemMention và viết tiếp bản báo cáo @contextScopeItemMention để ghi kết quả, xóa các file tạo ra trong quá trình suy nghĩ sau khi chắc chắn hoàn thành và pass > 80%
+```
+
+câu lệnh truy vấn nhanh từ cmd:
+```sql
+docker exec -i reshop_postgre psql -U postgres -d cdshop -c "<câu truy vấn>"
 ```

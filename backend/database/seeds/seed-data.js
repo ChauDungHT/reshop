@@ -52,8 +52,8 @@ async function seedData() {
     console.log(`[seed] Vendor created with ID: ${vendorId}`);
 
     // 3. Bảng Danh mục
-    // Xoá danh mục cũ nếu cần, hoặc insert on conflict do nothing.
-    // Ở đây ta xoá toàn bộ để re-seed cho sạch
+    // Xoá dữ liệu cũ để re-seed cho sạch
+    await client.query('DELETE FROM products');
     await client.query('DELETE FROM categories');
 
     const catParentQuery = `
@@ -100,27 +100,105 @@ async function seedData() {
 
     // 4. Dữ liệu Sản phẩm
     const productsData = [
-      { name: 'Yonex Astrox 88D Pro (Gen 3)', desc: 'Trọng lượng: 4U, Cán: G5. Điểm cân bằng: Nặng đầu. Sức căng: 28lbs. Công nghệ: Rotational Generator System.', price: 4250000, stock: 25, cat: 'Vợt Yonex' },
-      { name: 'Yonex Nanoflare 1000Z', desc: 'Trọng lượng: 4U, Cán: G5. Dòng vợt siêu tốc độ, thân cứng, đầu cân bằng. Phù hợp đánh đôi, phản tạt.', price: 4100000, stock: 15, cat: 'Vợt Yonex' },
-      { name: 'Lining Axforce 80', desc: 'Trọng lượng: 3U/4U. Thân vợt linh hoạt, thiên công mạnh mẽ. Sức căng tối đa: 30lbs.', price: 3850000, stock: 12, cat: 'Vợt Lining' },
-      { name: 'Lining Halbertec 8000', desc: 'Trọng lượng: 4U, Cán: G5. Dòng vợt kiểm soát cầu toàn diện, cân bằng giữa công và thủ.', price: 3700000, stock: 20, cat: 'Vợt Lining' },
-      { name: 'Victor Thruster Ryuga II', desc: 'Trọng lượng: 3U/4U. Vợt thiên công, thân cứng vừa phải, sức căng cực cao lên đến 31lbs.', price: 3600000, stock: 10, cat: 'Vợt Victor' },
-      { name: 'Victor Brave Sword 12 SE', desc: 'Trọng lượng: 3U/4U. Khung vợt kim cương xé gió, huyền thoại của Victor cho lối đánh tốc độ.', price: 3100000, stock: 30, cat: 'Vợt Victor' },
-      { name: 'Yonex Arcsaber 11 Pro', desc: 'Trọng lượng: 4U, Cán: G5. Vợt công thủ toàn diện, điều cầu cực kỳ chính xác.', price: 4050000, stock: 18, cat: 'Vợt Yonex' },
-      { name: 'Giày Yonex 65Z3 Wide', desc: 'Giày chuyên dụng cầu lông cao cấp. Đệm Power Cushion+. Màu: Trắng/Xanh. Size: 39-44.', price: 2800000, stock: 45, cat: 'Giày' },
-      { name: 'Cước Yonex BG66 Ultimax', desc: 'Đường kính: 0.65mm. Cước cho độ nảy cao, tiếng nổ đanh. Màu: Trắng, Vàng, Cam.', price: 180000, stock: 200, cat: 'Phụ kiện' },
-      { name: 'Quấn cán Yonex AC102EX', desc: 'Chất liệu cao su non bám tay, thấm hút mồ hôi tốt. Vỉ 3 cái.', price: 120000, stock: 500, cat: 'Phụ kiện' }
+      { 
+        name: 'Yonex Astrox 88D Pro (Gen 3)', 
+        desc: 'Trọng lượng: 4U, Cán: G5. Điểm cân bằng: Nặng đầu. Sức căng: 28lbs. Công nghệ: Rotational Generator System.', 
+        price: 4250000, 
+        stock: 25, 
+        cat: 'Vợt Yonex',
+        images: ['/uploads/products/astrox-88d.png']
+      },
+      { 
+        name: 'Yonex Nanoflare 1000Z', 
+        desc: 'Trọng lượng: 4U, Cán: G5. Dòng vợt siêu tốc độ, thân cứng, đầu cân bằng. Phù hợp đánh đôi, phản tạt.', 
+        price: 4100000, 
+        stock: 15, 
+        cat: 'Vợt Yonex',
+        images: ['/uploads/products/nanoflare-1000z.png']
+      },
+      { 
+        name: 'Lining Axforce 80', 
+        desc: 'Trọng lượng: 3U/4U. Thân vợt linh hoạt, thiên công mạnh mẽ. Sức căng tối đa: 30lbs.', 
+        price: 3850000, 
+        stock: 12, 
+        cat: 'Vợt Lining',
+        images: ['/uploads/products/axforce-80.png']
+      },
+      { 
+        name: 'Lining Halbertec 8000', 
+        desc: 'Trọng lượng: 4U, Cán: G5. Dòng vợt kiểm soát cầu toàn diện, cân bằng giữa công và thủ.', 
+        price: 3700000, 
+        stock: 20, 
+        cat: 'Vợt Lining',
+        images: ['/uploads/products/halbertec-8000.png']
+      },
+      { 
+        name: 'Victor Thruster Ryuga II', 
+        desc: 'Trọng lượng: 3U/4U. Vợt thiên công, thân cứng vừa phải, sức căng cực cao lên đến 31lbs.', 
+        price: 3600000, 
+        stock: 10, 
+        cat: 'Vợt Victor',
+        images: ['/uploads/products/ryuga-ii.png']
+      },
+      { 
+        name: 'Victor Brave Sword 12 SE', 
+        desc: 'Trọng lượng: 3U/4U. Khung vợt kim cương xé gió, huyền thoại của Victor cho lối đánh tốc độ.', 
+        price: 3100000, 
+        stock: 30, 
+        cat: 'Vợt Victor',
+        images: ['/uploads/products/brave-sword-12.png']
+      },
+      { 
+        name: 'Yonex Arcsaber 11 Pro', 
+        desc: 'Trọng lượng: 4U, Cán: G5. Vợt công thủ toàn diện, điều cầu cực kỳ chính xác.', 
+        price: 4050000, 
+        stock: 18, 
+        cat: 'Vợt Yonex',
+        images: ['/uploads/products/arcsaber-11-pro.png']
+      },
+      { 
+        name: 'Giày Yonex 65Z3 Wide', 
+        desc: 'Giày chuyên dụng cầu lông cao cấp. Đệm Power Cushion+. Màu: Trắng/Xanh. Size: 39-44.', 
+        price: 2800000, 
+        stock: 45, 
+        cat: 'Giày',
+        images: ['/uploads/products/yonex-65z3.png']
+      },
+      { 
+        name: 'Cước Yonex BG66 Ultimax', 
+        desc: 'Đường kính: 0.65mm. Cước cho độ nảy cao, tiếng nổ đanh. Màu: Trắng, Vàng, Cam.', 
+        price: 180000, 
+        stock: 200, 
+        cat: 'Phụ kiện',
+        images: ['/uploads/products/bg66-ultimax.png']
+      },
+      { 
+        name: 'Quấn cán Yonex AC102EX', 
+        desc: 'Chất liệu cao su non bám tay, thấm hút mồ hôi tốt. Vỉ 3 cái.', 
+        price: 120000, 
+        stock: 500, 
+        cat: 'Phụ kiện',
+        images: ['/uploads/products/ac102ex-grip.png']
+      }
     ];
 
     const productQuery = `
-      INSERT INTO products (vendor_id, category_id, name, description, price, stock, status)
-      VALUES ($1, $2, $3, $4, $5, $6, 'active')
+      INSERT INTO products (vendor_id, category_id, name, description, price, stock, image_urls, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'active')
       RETURNING id
     `;
 
     for (const p of productsData) {
       const catId = mapCategory(p.cat);
-      await client.query(productQuery, [vendorId, catId, p.name, p.desc, p.price, p.stock]);
+      await client.query(productQuery, [
+        vendorId, 
+        catId, 
+        p.name, 
+        p.desc, 
+        p.price, 
+        p.stock, 
+        JSON.stringify(p.images)
+      ]);
     }
     console.log(`[seed] Inserted 10 products successfully`);
 

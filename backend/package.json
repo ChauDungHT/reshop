@@ -11,6 +11,7 @@
     "test": "jest",
     "test:tsc": "tsc --noEmit",
     "db:migrate": "node database/migrate.js",
+    "db:sync": "node database/seeds/sync-data.js",
     "seed:admin": "node database/seeds/seed-admin.js",
     "seed:data": "node database/seeds/seed-data.js"
   },

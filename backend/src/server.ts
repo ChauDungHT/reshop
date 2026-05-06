@@ -5,6 +5,10 @@ import authRoutes from './modules/identity/auth.route';
 import userRoutes from './modules/identity/user.route';
 import productRoutes from './modules/catalog/product.route';
 import categoryRoutes from './modules/catalog/category.route';
+import walletRoutes from './modules/wallet/wallet.route';
+import cartRoutes from './modules/cart/cart.route';
+import checkoutRoutes from './modules/checkout/checkout.route';
+import afterSalesRoutes from './modules/after-sales/after-sales.route';
 
 const app: Express = express();
 const port = process.env.PORT || 8000;
@@ -20,6 +24,10 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/wallet', walletRoutes);
+app.use('/api/cart', cartRoutes);
+app.use('/api/checkout', checkoutRoutes);
+app.use('/api/after-sales', afterSalesRoutes);
 
 // Global Error Handler
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {

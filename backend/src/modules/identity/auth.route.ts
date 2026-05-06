@@ -9,7 +9,7 @@ const router = Router();
 router.post('/register-customer', registerCustomer);
 router.post('/register-vendor', registerVendor);
 router.post('/login', login);
-router.post('/logout', logout);
+router.post('/logout', authMiddleware, logout);
 
 // --- CÁC ROUTE TEST MIDDLEWARE VỪA ĐẠT ĐƯỢC ---
 // Tiền tố Prefix tại server.ts đang là: /api/auth

@@ -125,10 +125,32 @@ export const getProductById = async (req: Request, res: Response): Promise<void>
     `;
     const relatedResult = await db.query(relatedQuery, [product.category_id, id]);
 
+    // Fetch Reviews
+    const reviewsQuery = `
+      SELECT r.*, u.name as user_name, u.avatar_url
+      FROM reviews r
+      JOIN users u ON r.user_id = u.id
+      WHERE r.product_id = $1
+      ORDER BY r.created_at DESC
+    `;
+    const reviewsResult = await db.query(reviewsQuery, [id]);
+
+    // Fetch QA
+    const qaQuery = `
+      SELECT q.*, u.name as user_name
+      FROM qa q
+      JOIN users u ON q.user_id = u.id
+      WHERE q.product_id = $1
+      ORDER BY q.created_at DESC
+    `;
+    const qaResult = await db.query(qaQuery, [id]);
+
     console.log(`[catalog]: Fetch Product By ID Successful - 200 - Product: ${id}`);
     sendResponse(res, 200, true, 'Product details retrieved successfully', {
       product,
       relatedProducts: relatedResult.rows,
+      reviews: reviewsResult.rows,
+      qa: qaResult.rows,
     });
   } catch (err) {
     console.error('Error getProductById:', err);

@@ -146,7 +146,19 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     const token = jwt.sign(payload, secret, { expiresIn: '7d' });
 
     console.log(`[auth]: Login Successful - 200`);
-    sendResponse(res, 200, true, 'Login successful', { token, user: { id: user.id, name: user.name, role: user.role, status: user.status } });
+    sendResponse(res, 200, true, 'Login successful', { 
+      token, 
+      user: { 
+        id: user.id, 
+        name: user.name, 
+        email: user.email,
+        role: user.role, 
+        status: user.status,
+        wallet_balance: user.wallet_balance,
+        phone: user.phone,
+        address: user.address
+      } 
+    });
   } catch (err) {
     console.error('Error login:', err);
     console.log(`[auth]: Login Failed - 500`);
@@ -155,6 +167,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 };
 
 export const logout = async (req: Request, res: Response): Promise<void> => {
-  // Assuming stateless JWT without Redis blacklist for now - just sending success
+  const userId = req.user?.id;
+  const userRole = req.user?.role;
+  console.log(`[auth]: Logout Successful - 200 - User ID: ${userId}, Role: ${userRole}`);
   sendResponse(res, 200, true, 'Logged out successfully');
 };
