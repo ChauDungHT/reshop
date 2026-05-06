@@ -158,3 +158,4 @@ export const getProductById = async (req: Request, res: Response): Promise<void>
     sendResponse(res, 500, false, 'Internal Server Error');
   }
 };
+

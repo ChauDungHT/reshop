@@ -1,11 +1,11 @@
-# prompt thực thi các bước:
+# prompt thực thi các bước ở Backend:
 ```
 bạn được phép yêu cầu các công cụ cần thiết để thực thi yêu cầu trong file @contextScopeItemMention, luôn luôn đặt tên các file làm việc theo mẫu `scratch-*.js` kiểm tra quan hệ trong @contextScopeItemMentionvà sử dụng các test trong @contextScopeItemMentionđể kiểm tra và cập nhật vào @contextScopeItemMention, chạy `rm scratch-*.js` sau khi hoàn thành
 ```
 
-# hoặc:
+# prompt thực thi các bước ở frontend:
 ```
-tiến hành @contextScopeItemMention và cập nhật vào @task.md, xóa @contextScopeItemMention sau khi hoàn thành
+server backend và frontend đã được chạy, các tài khoản được đề cập ở @contextScopeItemMention, thực thi yêu cầu trong @contextScopeItemMention, thực hiện các bài test trong @contextScopeItemMention
 ```
 
 # prompt yêu cầu chia nhỏ các file backendteam, frontendteam, testteam:

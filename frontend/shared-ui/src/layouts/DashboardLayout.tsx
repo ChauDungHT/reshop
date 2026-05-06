@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import type { UserRole } from '../context/AuthContext';
+import { useAuth, UserRole } from '../context/AuthContext';
+import { useQuery } from '@tanstack/react-query';
+import axiosInstance from '../lib/axios';
 
 interface NavItem {
   label: string;
   path: string;
   icon: string;
+  badgeCount?: number;
 }
 
 const navByRole: Record<UserRole, NavItem[]> = {
@@ -16,9 +18,12 @@ const navByRole: Record<UserRole, NavItem[]> = {
     { label: 'Tài khoản', path: '/account', icon: '👤' },
   ],
   vendor: [
-    { label: 'Dashboard', path: '/dashboard', icon: '📊' },
-    { label: 'Sản phẩm', path: '/products', icon: '🗂' },
-    { label: 'Tài chính', path: '/finance', icon: '💰' },
+    { label: 'Dashboard', path: '/vendor/dashboard', icon: '📊' },
+    { label: 'Sản phẩm', path: '/vendor/products', icon: '🗂' },
+    { label: 'Đơn hàng', path: '/vendor/orders', icon: '📦' },
+    { label: 'Trả hàng', path: '/vendor/returns', icon: '↩️' },
+    { label: 'Hỏi & Đáp', path: '/vendor/qa', icon: '💬' },
+    { label: 'Gian hàng', path: '/vendor/shop-profile', icon: '🏪' },
   ],
   admin: [
     { label: 'Tổng quan', path: '/dashboard', icon: '🌐' },
@@ -46,9 +51,30 @@ const DashboardLayout = () => {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
 
+  const { data: dashboardStats } = useQuery({
+    queryKey: ['vendor-dashboard-stats'],
+    queryFn: async () => {
+        const res = await axiosInstance.get('/vendor/dashboard');
+        return res.data.data;
+    },
+    enabled: !!user && user.role === 'vendor',
+    refetchInterval: 30000, // 30s
+  });
+
   if (!user) return null;
 
-  const navItems = navByRole[user.role];
+  const getBadgeCount = (label: string) => {
+    if (user.role !== 'vendor' || !dashboardStats) return undefined;
+    if (label === 'Đơn hàng') return dashboardStats.new_orders;
+    if (label === 'Trả hàng') return dashboardStats.pending_returns;
+    if (label === 'Hỏi & Đáp') return dashboardStats.unanswered_qa;
+    return undefined;
+  };
+
+  const navItems = navByRole[user.role].map(item => ({
+    ...item,
+    badgeCount: getBadgeCount(item.label)
+  }));
 
   const handleLogout = () => {
     logout();
@@ -98,7 +124,16 @@ const DashboardLayout = () => {
               }
             >
               <span className="text-base flex-shrink-0">{item.icon}</span>
-              {!collapsed && <span>{item.label}</span>}
+              {!collapsed && (
+                <div className="flex-1 flex items-center justify-between min-w-0">
+                  <span className="truncate">{item.label}</span>
+                  {item.badgeCount !== undefined && item.badgeCount > 0 && (
+                    <span className="bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
+                      {item.badgeCount > 99 ? '99+' : item.badgeCount}
+                    </span>
+                  )}
+                </div>
+              )}
             </NavLink>
           ))}
         </nav>

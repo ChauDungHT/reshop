@@ -9,6 +9,7 @@ import walletRoutes from './modules/wallet/wallet.route';
 import cartRoutes from './modules/cart/cart.route';
 import checkoutRoutes from './modules/checkout/checkout.route';
 import afterSalesRoutes from './modules/after-sales/after-sales.route';
+import vendorRoutes from './modules/vendor/vendor.route';
 
 const app: Express = express();
 const port = process.env.PORT || 8000;
@@ -28,6 +29,7 @@ app.use('/api/wallet', walletRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/checkout', checkoutRoutes);
 app.use('/api/after-sales', afterSalesRoutes);
+app.use('/api/vendor', vendorRoutes);
 
 // Global Error Handler
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {

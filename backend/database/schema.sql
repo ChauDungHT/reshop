@@ -31,7 +31,7 @@ CREATE TYPE ReturnStatus AS ENUM (
     'resolved_admin'
 );
 
-CREATE TYPE ProductStatus AS ENUM ('active', 'inactive', 'out_of_stock');
+CREATE TYPE ProductStatus AS ENUM ('active', 'inactive', 'out_of_stock', 'deleted');
 
 -- Users Table
 CREATE TABLE IF NOT EXISTS
@@ -61,7 +61,16 @@ CREATE TABLE IF NOT EXISTS
         slug VARCHAR(150) UNIQUE NOT NULL,
         status VendorStatus DEFAULT 'inactive',
         commission_rate DECIMAL(5, 2) DEFAULT 0,
-        bank_info JSONB
+        bank_info JSONB,
+        logo_url VARCHAR(255),
+        banner_url VARCHAR(255),
+        phone VARCHAR(20),
+        address TEXT,
+        email VARCHAR(150),
+        return_policy_days INT DEFAULT 7,
+        return_policy_desc TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT now (),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT now ()
     );
 
 -- Categories Table
@@ -82,14 +91,26 @@ CREATE TABLE IF NOT EXISTS
         category_id UUID NOT NULL REFERENCES categories (id) ON DELETE RESTRICT,
         name VARCHAR(255) NOT NULL,
         description TEXT,
-        price DECIMAL(15, 2) NOT NULL,
-        stock INT NOT NULL DEFAULT 0,
+        price DECIMAL(15, 2) NOT NULL CHECK (price >= 0),
+        stock INT NOT NULL DEFAULT 0 CHECK (stock >= 0),
         is_featured BOOLEAN DEFAULT FALSE,
         image_urls JSONB,
         status ProductStatus DEFAULT 'active',
         average_rating DECIMAL(3, 2) DEFAULT 0,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT now (),
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT now ()
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT now (),
+        deleted_at TIMESTAMP WITH TIME ZONE
+    );
+
+-- Product Images Table
+CREATE TABLE IF NOT EXISTS
+    product_images (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+        product_id UUID NOT NULL REFERENCES products (id) ON DELETE CASCADE,
+        url VARCHAR(255) NOT NULL,
+        is_primary BOOLEAN DEFAULT FALSE,
+        display_order INT DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT now ()
     );
 
 -- Cart Items Table
@@ -167,6 +188,7 @@ CREATE TABLE IF NOT EXISTS
         question TEXT NOT NULL,
         answer TEXT,
         answered_by UUID REFERENCES vendors (id) ON DELETE SET NULL,
+        answered_at TIMESTAMP WITH TIME ZONE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT now (),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT now ()
     );
@@ -180,6 +202,7 @@ CREATE TABLE IF NOT EXISTS
         description TEXT,
         images JSONB,
         status ReturnStatus DEFAULT 'pending_vendor',
+        reject_reason TEXT,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT now (),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT now ()
     );
@@ -245,6 +268,6 @@ CREATE INDEX IF NOT EXISTS idx_qa_product_id ON qa (product_id);
 
 CREATE INDEX IF NOT EXISTS idx_qa_user_id ON qa (user_id);
 
-CREATE INDEX IF NOT EXISTS idx_return_requests_order_item_id ON return_requests (order_item_id);
-
 CREATE INDEX IF NOT EXISTS idx_return_requests_status ON return_requests (status);
+
+CREATE INDEX IF NOT EXISTS idx_product_images_product_id ON product_images (product_id);

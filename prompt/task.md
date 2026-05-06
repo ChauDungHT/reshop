@@ -1,18 +1,20 @@
 # Tiến độ dự án Reshop
 
-## Backend
-- [x] 01-migrate-database.md
-- [x] 02-san-pham-va-danh-muc.md
-- [x] 03-quan-ly-gio-hang.md
-- [x] 04-he-thong-vi-va-giao-dich.md
-- [x] 05-quy-trinh-checkout-atomic.md
-- [x] 06-hau-mai-review-qa-returns.md
+## Backend (Vendor Module)
+- [x] 01-database-schema-sync.md
+- [x] 02-image-upload-infrastructure.md
+- [x] 03-vendor-product-api.md
+- [x] 04-vendor-order-return-api.md
+- [x] 05-vendor-dashboard-settings.md
+- [x] 06-pdf-invoice-rendering.md
+- [x] 07-vendor-qa-api.md
 
-## Frontend
-- [x] 01-component-va-ui-loi.md
-- [x] 02-trang-chu-va-danh-sach-sp.md
-- [x] 03-logic-tim-kiem-va-bo-loc.md
-- [x] 04-chi-tiet-sp-va-tuong-tac.md
-- [x] 05-gio-hang-va-dong-bo-du-lieu.md
-- [x] 06-quy-trinh-thanh-toan-checkout.md
-- [x] 07-dashboard-vi-va-hau-mai.md
+## Frontend (Vendor Module)
+- [x] 01-vendor-layout-routing.md
+- [x] 02-shared-components-datatable-statcard.md
+- [x] 03-shared-components-imageuploader-rte.md
+- [ ] 04-vendor-dashboard-page.md
+- [ ] 05-vendor-product-pages.md
+- [ ] 06-vendor-order-pages.md
+- [ ] 07-vendor-return-pages.md
+- [ ] 08-vendor-qa-shop-profile.md

@@ -9,7 +9,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), tsconfigPaths()],
   resolve: {
     alias: {
-      '@shared-ui': path.resolve(__dirname, '../../shared-ui/src'),
+      '@shared-ui': path.resolve(__dirname, '../shared-ui/src'),
     },
   },
   test: {

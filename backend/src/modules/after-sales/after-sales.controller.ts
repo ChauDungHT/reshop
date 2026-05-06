@@ -237,3 +237,89 @@ export const approveReturn = async (req: Request, res: Response): Promise<void> 
     client.release();
   }
 };
+
+/**
+ * Lấy danh sách câu hỏi liên quan đến sản phẩm của Vendor
+ */
+export const getVendorQA = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const vendorId = req.user?.vendor_id;
+    const { status } = req.query; // 'answered', 'pending', 'all'
+
+    const queryParams: any[] = [vendorId];
+    let queryConditions = 'p.vendor_id = $1';
+
+    if (status === 'answered') {
+      queryConditions += ' AND q.answer IS NOT NULL';
+    } else if (status === 'pending') {
+      queryConditions += ' AND q.answer IS NULL';
+    }
+
+    const query = `
+      SELECT q.*, p.name as product_name, u.name as buyer_name
+      FROM qa q
+      JOIN products p ON q.product_id = p.id
+      JOIN users u ON q.user_id = u.id
+      WHERE ${queryConditions}
+      ORDER BY q.created_at DESC
+    `;
+
+    const result = await db.query(query, queryParams);
+    sendResponse(res, 200, true, 'Vendor QA list retrieved', result.rows);
+  } catch (err) {
+    console.error('Error getVendorQA:', err);
+    sendResponse(res, 500, false, 'Internal Server Error');
+  }
+};
+
+/**
+ * Trả lời câu hỏi Q&A (Vendor)
+ */
+export const answerQuestion = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { answer } = req.body;
+    const vendorId = req.user?.vendor_id;
+    const userId = req.user?.id;
+
+    if (!answer || answer.trim().length === 0) {
+      sendResponse(res, 400, false, 'Câu trả lời không được để trống.');
+      return;
+    }
+
+    // 1. Kiểm tra quyền sở hữu sản phẩm của câu hỏi
+    const checkRes = await db.query(
+      `SELECT p.vendor_id FROM qa q
+       JOIN products p ON q.product_id = p.id
+       WHERE q.id = $1`,
+      [id]
+    );
+
+    if (checkRes.rows.length === 0) {
+      sendResponse(res, 404, false, 'Câu hỏi không tồn tại.');
+      return;
+    }
+
+    if (checkRes.rows[0].vendor_id !== vendorId) {
+      sendResponse(res, 403, false, 'Bạn không có quyền trả lời câu hỏi này.');
+      return;
+    }
+
+    // 2. Cập nhật câu trả lời
+    await db.query(
+      `UPDATE qa SET 
+        answer = $1, 
+        answered_at = NOW(), 
+        answered_by = $2 
+       WHERE id = $3`,
+      [answer, vendorId, id]
+    );
+
+    console.log(`[after-sales]: Question Answered - QA ID: ${id}`);
+    sendResponse(res, 200, true, 'Đã gửi câu trả lời thành công.');
+  } catch (err) {
+    console.error('Error answerQuestion:', err);
+    sendResponse(res, 500, false, 'Internal Server Error');
+  }
+};
+
