@@ -1,51 +1,48 @@
-# 🎨 KẾ HOẠCH LÀM VIỆC ĐỘI FRONTEND (REACT + VITE + TAILWIND)
+# [FRONTEND TEAM] - MODULE 4: SUPER ADMIN (QUẢN TRỊ SÀN)
 
-## 1. DANH SÁCH COMPONENTS UI (UI COMPONENTS LIBRARY)
+## 1. UI COMPONENTS (React + Tailwind)
 
-| Component Name | Chức năng & Yêu cầu |
-|---|---|
-| `VendorLayout` | Khung giao diện chính (Layout). Bao gồm Sidebar (có hiển thị Badge tin nhắn, Badge trả hàng) và Topbar (thông báo, avatar người dùng). Responsive tự động gập Sidebar trên Mobile. |
-| `DataTable` | Bảng hiển thị dữ liệu (Sản phẩm, Đơn hàng, Trả hàng). Yêu cầu: <br>- Hỗ trợ Pagination (Phân trang). <br>- Hỗ trợ Sorting (Sắp xếp theo cột). <br>- Có ô Checkbox đầu mỗi dòng để hỗ trợ Bulk Actions. |
-| `StatCard` | Card hiển thị thống kê trên Dashboard (Ví dụ: Tổng doanh thu, Số đơn hàng). Có icon minh hoạ và hiển thị % tăng/giảm so với tháng trước. |
-| `ImageUploader` | Component upload đa phương tiện. Yêu cầu: <br>- Hỗ trợ Drag & Drop (Kéo thả file). <br>- Giới hạn tối đa 8 ảnh, preview ảnh ngay sau khi chọn. <br>- **Tính năng nâng cao:** Hỗ trợ kéo thả để sắp xếp thứ tự ảnh (Drag and Drop Sortable). |
-| `RichTextEditor` | Trình soạn thảo văn bản cho Mô tả sản phẩm. Gợi ý: Sử dụng `react-quill` hoặc `@tiptap/react`. Cần cấu hình thanh công cụ cơ bản (Bold, Italic, List, Link). |
-| `RevenueChart` | Biểu đồ doanh thu 30 ngày gần nhất. Gợi ý: Sử dụng `Recharts` (LineChart) để vẽ biểu đồ tương tác tốt, có Tooltip khi hover. |
+### 1.1 Layout & Navigation
+- **AdminLayout**: Wrapper chứa Sidebar (trái) và Header (trên), Content (phải).
+- **SidebarMenu**: Accordion menu (Quản lý User, Sản phẩm, Danh mục, Tranh chấp, Thống kê).
+- **AdminHeader**: Hiển thị Breadcrumbs, nút Profile và Thông báo Admin.
 
----
-
-## 2. QUẢN LÝ STATE (STATE MANAGEMENT)
-
-1. **Quản lý Bulk Actions (Xóa/Ẩn nhiều sản phẩm):**
-   - Sử dụng React Context hoặc thư viện Zustand để lưu danh sách các ID (`selectedRowIds`) đang được tick chọn trên `DataTable`.
-   - Có cơ chế Select All / Deselect All.
-   - Khi thực hiện Bulk Action thành công, tự động làm sạch (clear) danh sách ID đã chọn.
-
-2. **Quản lý Bộ lọc (Filters) & Phân trang:**
-   - **BẮT BUỘC** sử dụng URL Query Params (`useSearchParams` của `react-router-dom`) thay cho Local State (`useState`) để lưu trữ Bộ lọc (Status, Date Range, Keywords).
-   - *Lý do:* Đảm bảo khi User reload trang hoặc copy URL gửi cho người khác, kết quả lọc vẫn được giữ nguyên.
-
-3. **Lưu trữ dữ liệu Dashboard & Caching:**
-   - Sử dụng `@tanstack/react-query` để gọi API. Cấu hình tự động refetch (Stale time) hoặc refetch khi focus lại cửa sổ trình duyệt để dữ liệu doanh thu/đơn hàng mới luôn được cập nhật.
+### 1.2 Data & Logic Components
+- **AdminDataGrid**: Component bảng dùng chung, hỗ trợ:
+  - Phân trang (Pagination).
+  - Tìm kiếm (Search bar).
+  - Lọc (Filters dropdown).
+  - Nút Export CSV.
+- **CategoryTree**: Component hiển thị cây danh mục, hỗ trợ kéo thả (Dnd-kit hoặc React-beautiful-dnd) để sắp xếp `sort_order`.
+- **DashboardCharts**: Sử dụng **Recharts**:
+  - `LineChart`: Thống kê doanh thu theo thời gian.
+  - `PieChart`: Tỷ lệ đơn hàng theo trạng thái.
 
 ---
 
-## 3. CÁC TRANG CẦN XÂY DỰNG (PAGES & NAVIGATION)
+## 2. QUẢN LÝ STATE & ROUTING
 
-- `/vendor/dashboard`: Trang chủ Vendor. Chứa các `StatCard` và `RevenueChart`.
-- `/vendor/shop-profile`: Trang chỉnh sửa thông tin gian hàng (Form cập nhật logo, banner, thông tin liên hệ).
-- `/vendor/products`: Trang danh sách sản phẩm. Sử dụng `DataTable` kết hợp với Toolbar (Nút Thêm mới, Bulk Delete, Filter).
-- `/vendor/products/new`: Trang thêm mới sản phẩm. Chứa form, `RichTextEditor`, `ImageUploader`.
-- `/vendor/products/:id/edit`: Trang chỉnh sửa sản phẩm. Fetch dữ liệu cũ để điền vào form trước.
-- `/vendor/orders`: Trang danh sách đơn hàng đến.
-- `/vendor/orders/:id`: Trang chi tiết đơn hàng (Cập nhật trạng thái đơn, In hóa đơn PDF).
-- `/vendor/returns`: Trang danh sách các yêu cầu trả hàng cần phê duyệt.
-- `/vendor/qa`: Trang quản lý Câu hỏi & Đáp án (Inline reply form).
+### 2.1 State Management (React Query)
+- **Nested Categories State**: Khi cập nhật `parent_id` qua kéo thả, invalidate query `['categories', 'tree']`.
+- **Global Date Filter**: Lưu `startDate`, `endDate` trong URL params để tất cả biểu đồ Dashboard tự động đồng bộ.
+
+### 2.2 Pages & Routing
+| Path | Component | Yêu cầu logic |
+| :--- | :--- | :--- |
+| `/admin/dashboard` | `AdminDashboard` | Thẻ KPI + 2 biểu đồ chính. |
+| `/admin/users` | `UserManagement` | Tab: All, Pending Vendors, Banned. |
+| `/admin/categories` | `CategoryManagement` | TreeView + Form Add/Edit Category. |
+| `/admin/disputes` | `DisputeManagement` | Danh sách tranh chấp escalated. |
+
+- **AdminRouteGuard**: HOC hoặc Wrapper component kiểm tra `user.role === 'admin'`. Nếu không phải, redirect về `/403`.
 
 ---
 
-## 4. GIAO ĐIỂM KẾT NỐI VỚI BACKEND (INTEGRATION POINTS)
-- **Chuẩn bị FormData:** Khi upload file ảnh, Frontend phải khởi tạo đối tượng `FormData`, append các trường text và append file ảnh dưới key là `images` để Backend (Multer) có thể đọc được.
-- **Bảo mật XSS (Cross-Site Scripting):** Dữ liệu trả về từ cột `long_desc` (Mô tả chi tiết) là chuỗi HTML. Frontend khi render cần sử dụng thư viện `dompurify` để sanitize mã HTML trước khi đưa vào `dangerouslySetInnerHTML`.
-- **Định dạng Export:** 
-  - Với file PDF/CSV tải về, gọi API với `responseType: 'blob'`. 
-  - Sau đó Frontend tạo URL ảo (`window.URL.createObjectURL(blob)`) để ép trình duyệt tải file xuống.
+## 3. FLOW XỬ LÝ CHÍNH
+
+1.  **Phê duyệt Vendor**: 
+    - Xem chi tiết hồ sơ -> Bấm "Approve" -> Gọi API -> Hiện Toast thông báo thành công -> Invalidate danh sách.
+2.  **Kéo thả Danh mục**:
+    - Khi kết thúc kéo (onDragEnd) -> Tính toán `parent_id` và `sort_order` mới -> Gọi API Bulk Update -> Cập nhật UI lạc quan (Optimistic Update).
+3.  **Xử lý Tranh chấp**:
+    - Hiển thị đầy đủ bằng chứng ảnh + lịch sử chat (nhúng từ Module 7) -> Form phán quyết (Chọn bên thắng + Ghi chú) -> Submit.

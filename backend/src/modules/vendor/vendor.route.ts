@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { 
   getVendorProducts, 
+  getVendorProductById,
   createProduct, 
   updateProduct, 
   bulkDeleteProducts, 
   bulkToggleProducts,
+  bulkUpdateStock,
   getVendorOrders,
   updateOrderStatus,
   getVendorReturns,
@@ -39,10 +41,12 @@ router.put('/shop',
 
 // Quản lý sản phẩm (Prompt 03)
 router.get('/products', getVendorProducts);
+router.get('/products/:id', getVendorProductById);
 router.post('/products', upload.array('images', 8), processProductImages, createProduct);
 router.put('/products/bulk-toggle', bulkToggleProducts);
+router.put('/products/bulk-stock', bulkUpdateStock);
 router.delete('/products/bulk', bulkDeleteProducts);
-router.put('/products/:id', updateProduct);
+router.put('/products/:id', upload.array('images', 8), processProductImages, updateProduct);
 
 // Quản lý đơn hàng (Prompt 04)
 router.get('/orders', getVendorOrders);

@@ -11,6 +11,13 @@ interface AdminStats {
   systemHealth: 'healthy' | 'degraded' | 'down';
 }
 
+interface IAuditLog {
+  actor: string;
+  action: string;
+  target: string;
+  time: string;
+}
+
 const GlobalMetric = ({ label, value, sub, icon, accent }: { label: string; value: string; sub?: string; icon: string; accent: string }) => (
   <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
     <div className="flex items-start justify-between mb-3">
@@ -28,12 +35,12 @@ const GlobalMetric = ({ label, value, sub, icon, accent }: { label: string; valu
 const AdminDashboard = () => {
   const { data: stats } = useQuery<AdminStats>({
     queryKey: ['admin-stats'],
-    queryFn: async () => (await axiosInstance.get('/admin/stats')).data,
+    queryFn: async () => (await axiosInstance.get('/admin/stats')).data.data,
   });
 
-  const { data: recentActions } = useQuery<any[]>({
+  const { data: recentActions } = useQuery<IAuditLog[]>({
     queryKey: ['admin-audit', 'recent'],
-    queryFn: async () => (await axiosInstance.get('/admin/audit?limit=5')).data,
+    queryFn: async () => (await axiosInstance.get('/admin/audit?limit=5')).data.data,
   });
 
   const mockStats: AdminStats = {
@@ -107,7 +114,7 @@ const AdminDashboard = () => {
           <a href="/reports" className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">Xem đầy đủ →</a>
         </div>
         <div className="divide-y divide-slate-800">
-          {audit.map((entry: any, i: number) => (
+          {audit.map((entry: IAuditLog, i: number) => (
             <div key={i} className="px-6 py-4 flex items-center gap-4 hover:bg-slate-800/50 transition-colors">
               <div className="w-8 h-8 bg-indigo-600/20 rounded-lg flex items-center justify-center text-sm shrink-0">🔑</div>
               <div className="flex-1 min-w-0">

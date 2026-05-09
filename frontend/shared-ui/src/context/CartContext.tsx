@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import axiosInstance from '../lib/axios';
 import { useAuth } from './AuthContext';
+import type { IProduct, IApiResponse } from '../types';
 
 export interface CartItem {
   id: string; // id in DB or product_id if not in DB
@@ -15,7 +16,7 @@ export interface CartItem {
 
 interface CartContextType {
   cartItems: CartItem[];
-  addItem: (product: any, quantity: number) => void;
+  addItem: (product: IProduct, quantity: number) => void;
   removeItem: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
   toggleSelect: (id: string) => void;
@@ -40,9 +41,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(true);
       if (user) {
         try {
-          const res = await axiosInstance.get('/cart');
+          const res = await axiosInstance.get<IApiResponse<CartItem[]>>('/cart');
           if (res.data.success) {
-            setCartItems(res.data.data.map((item: any) => ({ ...item, selected: true })));
+            setCartItems(res.data.data.map((item) => ({ ...item, selected: true })));
           }
         } catch (err) {
           console.error('Failed to fetch cart from server', err);
@@ -78,12 +79,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       await axiosInstance.post('/cart/sync', {
-        items: items.map((i: any) => ({ product_id: i.product_id, quantity: i.quantity }))
+        items: items.map((i: CartItem) => ({ product_id: i.product_id, quantity: i.quantity }))
       });
       // Refresh cart from server
-      const res = await axiosInstance.get('/cart');
+      const res = await axiosInstance.get<IApiResponse<CartItem[]>>('/cart');
       if (res.data.success) {
-        setCartItems(res.data.data.map((item: any) => ({ ...item, selected: true })));
+        setCartItems(res.data.data.map((item) => ({ ...item, selected: true })));
       }
       localStorage.removeItem(LOCAL_STORAGE_KEY);
     } catch (err) {
@@ -98,12 +99,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user, syncCart]);
 
-  const addItem = async (product: any, quantity: number) => {
+  const addItem = async (product: IProduct, quantity: number) => {
     if (user) {
       try {
         await axiosInstance.post('/cart', { product_id: product.id, quantity });
-        const res = await axiosInstance.get('/cart');
-        setCartItems(res.data.data.map((item: any) => ({ ...item, selected: true })));
+        const res = await axiosInstance.get<IApiResponse<CartItem[]>>('/cart');
+        setCartItems(res.data.data.map((item) => ({ ...item, selected: true })));
       } catch (err) {
         console.error('Add to cart failed', err);
       }
@@ -123,7 +124,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           price: product.price,
           quantity,
           current_stock: product.stock,
-          image_urls: product.image_urls,
+          image_urls: product.image_urls || null,
           selected: true
         }];
       });

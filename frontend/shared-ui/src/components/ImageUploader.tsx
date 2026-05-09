@@ -6,7 +6,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  DragEndEvent,
+  type DragEndEvent,
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -26,6 +26,7 @@ interface ImageItem {
 interface ImageUploaderProps {
   maxImages?: number;
   onChange: (files: File[]) => void;
+  onRemoveInitial?: (url: string) => void;
   initialPreviews?: string[];
 }
 
@@ -62,10 +63,14 @@ const SortableImage = ({ id, preview, onRemove }: { id: string; preview: string;
   );
 };
 
-const ImageUploader: React.FC<ImageUploaderProps> = ({ maxImages = 8, onChange, initialPreviews = [] }) => {
-  const [images, setImages] = useState<ImageItem[]>(
-    initialPreviews.map((url, i) => ({ id: `initial-${i}`, preview: url }))
-  );
+const ImageUploader: React.FC<ImageUploaderProps> = ({ maxImages = 8, onChange, onRemoveInitial, initialPreviews = [] }) => {
+  const [images, setImages] = useState<ImageItem[]>([]);
+
+  useEffect(() => {
+    if (initialPreviews.length > 0) {
+      setImages(initialPreviews.map((url, i) => ({ id: `initial-${i}`, preview: url })));
+    }
+  }, [initialPreviews]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -105,6 +110,8 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({ maxImages = 8, onChange, 
       const itemToRemove = prev.find(img => img.id === id);
       if (itemToRemove?.file) {
         URL.revokeObjectURL(itemToRemove.preview);
+      } else if (itemToRemove && onRemoveInitial) {
+        onRemoveInitial(itemToRemove.preview);
       }
       return prev.filter(img => img.id !== id);
     });

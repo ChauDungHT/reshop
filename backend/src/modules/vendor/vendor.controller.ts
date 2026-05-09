@@ -5,6 +5,9 @@ import puppeteer from 'puppeteer';
 import handlebars from 'handlebars';
 import fs from 'fs';
 import path from 'path';
+import { UploadRequest } from '../../shared/types/request';
+import { IOrder, IReturnRequest, IProduct, IVendor } from '../../shared/types/models';
+import { IPaginatedData } from '../../shared/types/api';
 
 // Đăng ký helper cho handlebars
 handlebars.registerHelper('formatCurrency', (value) => {
@@ -57,15 +60,16 @@ export const getVendorOrders = async (req: Request, res: Response): Promise<void
     const result = await db.query(dataQuery, [...queryParams, limitNum, offset]);
 
     console.log(`[vendor]: Fetch Orders Successful - Vendor: ${vendorId}`);
-    sendResponse(res, 200, true, 'Vendor orders retrieved successfully', {
-      orders: result.rows,
+    sendResponse<IPaginatedData<IOrder>>(res, 200, true, 'Vendor orders retrieved successfully', {
+      items: result.rows as IOrder[],
       total,
       page: pageNum,
       limit: limitNum,
+      total_pages: Math.ceil(total / limitNum)
     });
   } catch (err) {
     console.error('Error getVendorOrders:', err);
-    sendResponse(res, 500, false, 'Internal Server Error');
+    sendResponse<null>(res, 500, false, 'Internal Server Error', null);
   }
 };
 
@@ -136,11 +140,11 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
 
     await client.query('COMMIT');
     console.log(`[vendor]: Order Status Updated - ID: ${id}, Status: ${status}`);
-    sendResponse(res, 200, true, `Đã ${status === 'processing' ? 'duyệt' : 'từ chối'} đơn hàng thành công.`);
+    sendResponse<null>(res, 200, true, `Đã ${status === 'processing' ? 'duyệt' : 'từ chối'} đơn hàng thành công.`, null);
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Error updateOrderStatus:', err);
-    sendResponse(res, 500, false, 'Internal Server Error');
+    sendResponse<null>(res, 500, false, 'Internal Server Error', null);
   } finally {
     client.release();
   }
@@ -174,10 +178,18 @@ export const getVendorReturns = async (req: Request, res: Response): Promise<voi
     `;
 
     const result = await db.query(query, queryParams);
-    sendResponse(res, 200, true, 'Vendor return requests retrieved successfully', result.rows);
+    
+    // For now, return as paginated data but without real pagination metadata if not requested
+    sendResponse<IPaginatedData<IReturnRequest>>(res, 200, true, 'Vendor return requests retrieved successfully', {
+      items: result.rows as IReturnRequest[],
+      total: result.rowCount ?? 0,
+      page: 1,
+      limit: result.rowCount ?? 0,
+      total_pages: 1
+    });
   } catch (err) {
     console.error('Error getVendorReturns:', err);
-    sendResponse(res, 500, false, 'Internal Server Error');
+    sendResponse<null>(res, 500, false, 'Internal Server Error', null);
   }
 };
 
@@ -228,14 +240,14 @@ export const approveReturnByVendor = async (req: Request, res: Response): Promis
 
     await client.query('COMMIT');
     console.log(`[vendor]: Return Approved - ID: ${id}`);
-    sendResponse(res, 200, true, 'Đã duyệt trả hàng và hoàn tiền cho khách thành công.');
+    sendResponse<null>(res, 200, true, 'Đã duyệt trả hàng và hoàn tiền cho khách thành công.', null);
   } catch (err: any) {
     await client.query('ROLLBACK');
     console.error('Error approveReturnByVendor:', err.message);
-    if (err.message === 'NOT_FOUND') sendResponse(res, 404, false, 'Không tìm thấy yêu cầu.');
-    else if (err.message === 'FORBIDDEN') sendResponse(res, 403, false, 'Bạn không có quyền xử lý yêu cầu này.');
-    else if (err.message === 'ALREADY_PROCESSED') sendResponse(res, 400, false, 'Yêu cầu này đã được xử lý hoặc không hợp lệ.');
-    else sendResponse(res, 500, false, 'Internal Server Error');
+    if (err.message === 'NOT_FOUND') sendResponse<null>(res, 404, false, 'Không tìm thấy yêu cầu.', null);
+    else if (err.message === 'FORBIDDEN') sendResponse<null>(res, 403, false, 'Bạn không có quyền xử lý yêu cầu này.', null);
+    else if (err.message === 'ALREADY_PROCESSED') sendResponse<null>(res, 400, false, 'Yêu cầu này đã được xử lý hoặc không hợp lệ.', null);
+    else sendResponse<null>(res, 500, false, 'Internal Server Error', null);
   } finally {
     client.release();
   }
@@ -277,10 +289,10 @@ export const rejectReturnByVendor = async (req: Request, res: Response): Promise
     );
 
     console.log(`[vendor]: Return Rejected - ID: ${id}`);
-    sendResponse(res, 200, true, 'Đã từ chối yêu cầu trả hàng.');
+    sendResponse<null>(res, 200, true, 'Đã từ chối yêu cầu trả hàng.', null);
   } catch (err) {
     console.error('Error rejectReturnByVendor:', err);
-    sendResponse(res, 500, false, 'Internal Server Error');
+    sendResponse<null>(res, 500, false, 'Internal Server Error', null);
   }
 };
 
@@ -330,23 +342,46 @@ export const getVendorProducts = async (req: Request, res: Response): Promise<vo
     const result = await db.query(dataQuery, [...queryParams, limitNum, offset]);
 
     console.log(`[vendor]: Vendor Fetch Products Successful - Vendor: ${vendor_id}`);
-    sendResponse(res, 200, true, 'Vendor products retrieved successfully', {
-      products: result.rows,
+    sendResponse<IPaginatedData<IProduct>>(res, 200, true, 'Vendor products retrieved successfully', {
+      items: result.rows as IProduct[],
       total,
       page: pageNum,
       limit: limitNum,
+      total_pages: Math.ceil(total / limitNum)
     });
   } catch (err) {
     console.error('Error getVendorProducts:', err);
-    sendResponse(res, 500, false, 'Internal Server Error');
+    sendResponse<null>(res, 500, false, 'Internal Server Error', null);
   }
 };
 
-export const createProduct = async (req: Request, res: Response): Promise<void> => {
+export const getVendorProductById = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const vendor_id = req.user?.vendor_id;
+
+    const result = await db.query(
+      "SELECT * FROM products WHERE id = $1 AND vendor_id = $2",
+      [id, vendor_id]
+    );
+
+    if (result.rows.length === 0) {
+      sendResponse(res, 404, false, 'Product not found or unauthorized');
+      return;
+    }
+
+    sendResponse<IProduct>(res, 200, true, 'Product retrieved successfully', result.rows[0] as IProduct);
+  } catch (err) {
+    console.error('Error getVendorProductById:', err);
+    sendResponse<null>(res, 500, false, 'Internal Server Error', null);
+  }
+};
+
+export const createProduct = async (req: UploadRequest, res: Response): Promise<void> => {
   try {
     const vendor_id = req.user?.vendor_id;
     const { name, description, price, stock, category_id, is_featured } = req.body;
-    const image_urls = (req as any).processedImages || [];
+    const image_urls = req.processedImages || [];
 
     const result = await db.query(
       `INSERT INTO products (vendor_id, name, description, price, stock, category_id, is_featured, image_urls, status)
@@ -366,18 +401,37 @@ export const createProduct = async (req: Request, res: Response): Promise<void> 
     }
 
     console.log(`[vendor]: Product Created Successful - ID: ${productId}`);
-    sendResponse(res, 201, true, 'Product created successfully', { product_id: productId });
+    sendResponse<{ product_id: string }>(res, 201, true, 'Product created successfully', { product_id: productId });
   } catch (err) {
     console.error('Error createProduct:', err);
-    sendResponse(res, 500, false, 'Internal Server Error');
+    sendResponse<null>(res, 500, false, 'Internal Server Error', null);
   }
 };
 
-export const updateProduct = async (req: Request, res: Response): Promise<void> => {
+export const updateProduct = async (req: UploadRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const vendor_id = req.user?.vendor_id;
     const { name, description, price, stock, category_id, is_featured, status } = req.body;
+    
+    // Merge existing images with newly uploaded ones
+    let existing_images = [];
+    try {
+        existing_images = typeof req.body.existing_images === 'string' 
+            ? JSON.parse(req.body.existing_images) 
+            : (req.body.existing_images || []);
+    } catch (e) {
+        existing_images = [];
+    }
+    
+    const new_images = req.processedImages || [];
+    const raw_final_image_urls = [...existing_images, ...new_images];
+    
+    // Safety: Ensure all URLs are relative paths starting with /uploads/
+    const final_image_urls = raw_final_image_urls.map((url: string) => {
+        const uploadsIndex = url.indexOf('/uploads/');
+        return uploadsIndex !== -1 ? url.substring(uploadsIndex) : url;
+    });
 
     // Check ownership
     const check = await db.query("SELECT vendor_id FROM products WHERE id = $1", [id]);
@@ -392,16 +446,26 @@ export const updateProduct = async (req: Request, res: Response): Promise<void> 
 
     await db.query(
       `UPDATE products 
-       SET name = $1, description = $2, price = $3, stock = $4, category_id = $5, is_featured = $6, status = $7, updated_at = NOW()
-       WHERE id = $8`,
-      [name, description, price, stock, category_id, is_featured, status, id]
+       SET name = $1, description = $2, price = $3, stock = $4, category_id = $5, is_featured = $6, status = $7, 
+           image_urls = $8, updated_at = NOW()
+       WHERE id = $9`,
+      [name, description, price, stock, category_id, is_featured === 'true' || is_featured === true, status, JSON.stringify(final_image_urls), id]
     );
 
+    // Sync product_images table
+    await db.query('DELETE FROM product_images WHERE product_id = $1', [id]);
+    if (final_image_urls.length > 0) {
+      const imgValues = final_image_urls.map((url: string, index: number) => 
+        `('${id}', '${url}', ${index === 0}, ${index})`
+      ).join(',');
+      await db.query(`INSERT INTO product_images (product_id, url, is_primary, display_order) VALUES ${imgValues}`);
+    }
+
     console.log(`[vendor]: Product Updated Successful - ID: ${id}`);
-    sendResponse(res, 200, true, 'Product updated successfully');
+    sendResponse<null>(res, 200, true, 'Product updated successfully', null);
   } catch (err) {
     console.error('Error updateProduct:', err);
-    sendResponse(res, 500, false, 'Internal Server Error');
+    sendResponse<null>(res, 500, false, 'Internal Server Error', null);
   }
 };
 
@@ -439,10 +503,10 @@ export const bulkDeleteProducts = async (req: Request, res: Response): Promise<v
     );
 
     console.log(`[vendor]: Bulk Delete Successful - Vendor: ${vendor_id}`);
-    sendResponse(res, 200, true, 'Products successfully soft-deleted');
+    sendResponse<null>(res, 200, true, 'Products successfully soft-deleted', null);
   } catch (err) {
     console.error('Error bulkDeleteProducts:', err);
-    sendResponse(res, 500, false, 'Internal Server Error');
+    sendResponse<null>(res, 500, false, 'Internal Server Error', null);
   }
 };
 
@@ -462,10 +526,49 @@ export const bulkToggleProducts = async (req: Request, res: Response): Promise<v
     );
 
     console.log(`[vendor]: Bulk Toggle Successful - Status: ${status}`);
-    sendResponse(res, 200, true, `Products status updated to ${status}`);
+    sendResponse<null>(res, 200, true, `Products status updated to ${status}`, null);
   } catch (err) {
     console.error('Error bulkToggleProducts:', err);
-    sendResponse(res, 500, false, 'Internal Server Error');
+    sendResponse<null>(res, 500, false, 'Internal Server Error', null);
+  }
+};
+
+export const bulkUpdateStock = async (req: Request, res: Response): Promise<void> => {
+  const client = await db.pool.connect();
+  try {
+    const { updates } = req.body; // Array of { id: string, stock: number }
+    const vendor_id = req.user?.vendor_id;
+
+    if (!updates || !Array.isArray(updates)) {
+      sendResponse(res, 400, false, 'Invalid update data');
+      return;
+    }
+
+    await client.query('BEGIN');
+
+    for (const item of updates) {
+      // Ensure the product belongs to the vendor
+      const updateRes = await client.query(
+        `UPDATE products 
+         SET stock = $1, updated_at = NOW() 
+         WHERE id = $2 AND vendor_id = $3`,
+        [item.stock, item.id, vendor_id]
+      );
+      
+      if (updateRes.rowCount === 0) {
+        console.warn(`[vendor]: Stock update failed for product ${item.id} - not found or unauthorized`);
+      }
+    }
+
+    await client.query('COMMIT');
+    console.log(`[vendor]: Bulk Stock Update Successful - Vendor: ${vendor_id}, Count: ${updates.length}`);
+    sendResponse<null>(res, 200, true, `Đã cập nhật tồn kho cho ${updates.length} sản phẩm thành công.`, null);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error bulkUpdateStock:', err);
+    sendResponse<null>(res, 500, false, 'Internal Server Error', null);
+  } finally {
+    client.release();
   }
 };
 
@@ -540,7 +643,7 @@ export const getVendorDashboard = async (req: Request, res: Response): Promise<v
       [vendorId]
     );
 
-    sendResponse(res, 200, true, 'Dashboard stats retrieved successfully', {
+    sendResponse<any>(res, 200, true, 'Dashboard stats retrieved successfully', {
       total_revenue: parseFloat(revenueRes.rows[0].total_revenue),
       new_orders: parseInt(newOrdersRes.rows[0].new_orders),
       active_products: parseInt(activeProductsRes.rows[0].active_products),
@@ -551,7 +654,7 @@ export const getVendorDashboard = async (req: Request, res: Response): Promise<v
     });
   } catch (err) {
     console.error('Error getVendorDashboard:', err);
-    sendResponse(res, 500, false, 'Internal Server Error');
+    sendResponse<null>(res, 500, false, 'Internal Server Error', null);
   }
 };
 
@@ -559,14 +662,14 @@ export const getVendorProfile = async (req: Request, res: Response): Promise<voi
   try {
     const vendorId = req.user?.vendor_id;
     const result = await db.query("SELECT * FROM vendors WHERE id = $1", [vendorId]);
-    sendResponse(res, 200, true, 'Vendor profile retrieved successfully', result.rows[0]);
+    sendResponse<IVendor>(res, 200, true, 'Vendor profile retrieved successfully', result.rows[0] as IVendor);
   } catch (err) {
     console.error('Error getVendorProfile:', err);
-    sendResponse(res, 500, false, 'Internal Server Error');
+    sendResponse<null>(res, 500, false, 'Internal Server Error', null);
   }
 };
 
-export const updateVendorProfile = async (req: Request, res: Response): Promise<void> => {
+export const updateVendorProfile = async (req: UploadRequest, res: Response): Promise<void> => {
   try {
     const vendorId = req.user?.vendor_id;
     const { store_name, phone, address, email, return_policy_days, return_policy_desc } = req.body;
@@ -582,8 +685,8 @@ export const updateVendorProfile = async (req: Request, res: Response): Promise<
     if (return_policy_desc) { updates.push(`return_policy_desc = $${updates.length + 1}`); values.push(return_policy_desc); }
     
     // Images from middleware
-    const logoUrl = (req as any).logoUrl;
-    const bannerUrl = (req as any).bannerUrl;
+    const logoUrl = req.logoUrl;
+    const bannerUrl = req.bannerUrl;
     
     if (logoUrl) { updates.push(`logo_url = $${updates.length + 1}`); values.push(logoUrl); }
     if (bannerUrl) { updates.push(`banner_url = $${updates.length + 1}`); values.push(bannerUrl); }
@@ -597,10 +700,10 @@ export const updateVendorProfile = async (req: Request, res: Response): Promise<
     await db.query(`UPDATE vendors SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${values.length}`, values);
 
     console.log(`[vendor]: Profile Updated - Vendor: ${vendorId}`);
-    sendResponse(res, 200, true, 'Cập nhật thông tin cửa hàng thành công.');
+    sendResponse<null>(res, 200, true, 'Cập nhật thông tin cửa hàng thành công.', null);
   } catch (err) {
     console.error('[Error - updateVendorProfile]:', err);
-    sendResponse(res, 500, false, 'Internal Server Error');
+    sendResponse<null>(res, 500, false, 'Internal Server Error', null);
   }
 };
 

@@ -1,21 +1,5 @@
 ```text
 reshop/
-├── .agent
-│   ├── AI_Engineering.md
-│   ├── Q&A.md
-│   ├── api_skill.md
-│   ├── backendteam.md
-│   ├── content.md
-│   ├── db.md
-│   ├── frontendteam.md
-│   ├── function.md
-│   ├── log.md
-│   ├── rule.md
-│   ├── structure.md
-│   ├── test.md
-│   └── testteam.md
-├── .gitignore
-├── README.md
 ├── backend
 │   ├── .env
 │   ├── .env.example
@@ -31,6 +15,7 @@ reshop/
 │   ├── jest.config.js
 │   ├── nodemon.json
 │   ├── package.json
+│   ├── scratch
 │   ├── src
 │   │   ├── core
 │   │   │   ├── db.ts
@@ -51,25 +36,31 @@ reshop/
 │   │   │   │   ├── checkout.controller.ts
 │   │   │   │   └── checkout.route.ts
 │   │   │   ├── identity
-│   │   │   │   ├── __tests__
-│   │   │   │   │   ├── auth.api.test.ts
-│   │   │   │   │   └── user.api.test.ts
 │   │   │   │   ├── auth.controller.ts
 │   │   │   │   ├── auth.route.ts
 │   │   │   │   ├── user.controller.ts
-│   │   │   │   └── user.route.ts
+│   │   │   │   ├── user.route.ts
+│   │   │   │   └── __tests__
+│   │   │   │       ├── auth.api.test.ts
+│   │   │   │       └── user.api.test.ts
+│   │   │   ├── vendor
+│   │   │   │   ├── vendor.controller.ts
+│   │   │   │   └── vendor.route.ts
 │   │   │   └── wallet
 │   │   │       ├── wallet.controller.ts
 │   │   │       └── wallet.route.ts
 │   │   ├── server.ts
 │   │   └── shared
 │   │       ├── middlewares
-│   │       │   ├── __tests__
-│   │       │   │   └── middlewares.test.ts
 │   │       │   ├── auth.middleware.ts
 │   │       │   ├── owner.guard.ts
-│   │       │   └── role.guard.ts
-│   │       └── response.ts
+│   │       │   ├── role.guard.ts
+│   │       │   ├── upload.middleware.ts
+│   │       │   └── __tests__
+│   │       │       └── middlewares.test.ts
+│   │       ├── response.ts
+│   │       └── templates
+│   │           └── invoice.html
 │   └── tsconfig.json
 ├── docker-compose.yml
 ├── frontend
@@ -77,13 +68,17 @@ reshop/
 │   │   ├── package.json
 │   │   ├── src
 │   │   │   ├── components
+│   │   │   │   ├── DataTable.tsx
+│   │   │   │   ├── ImageUploader.tsx
+│   │   │   │   ├── index.ts
 │   │   │   │   ├── OrderBadge.tsx
 │   │   │   │   ├── OrderStepper.tsx
 │   │   │   │   ├── PrivateRoute.tsx
 │   │   │   │   ├── ProductCard.tsx
 │   │   │   │   ├── QuantitySelector.tsx
+│   │   │   │   ├── RichTextEditor.tsx
 │   │   │   │   ├── RoleRoute.tsx
-│   │   │   │   └── index.ts
+│   │   │   │   └── StatCard.tsx
 │   │   │   ├── context
 │   │   │   │   ├── AuthContext.tsx
 │   │   │   │   └── CartContext.tsx
@@ -97,14 +92,13 @@ reshop/
 │   │   │   └── styles
 │   │   └── tsconfig.json
 │   └── storefront
-│       ├── .gitignore
-│       ├── README.md
 │       ├── eslint.config.js
 │       ├── index.html
 │       ├── package.json
 │       ├── public
 │       │   ├── favicon.svg
 │       │   └── icons.svg
+│       ├── README.md
 │       ├── src
 │       │   ├── App.css
 │       │   ├── App.tsx
@@ -127,12 +121,24 @@ reshop/
 │       │   │   │   └── VendorDashboard.tsx
 │       │   │   ├── error
 │       │   │   │   └── ForbiddenPage.tsx
-│       │   │   └── shop
-│       │   │       ├── CartPage.tsx
-│       │   │       ├── CheckoutPage.tsx
-│       │   │       ├── ProductDetailPage.tsx
-│       │   │       ├── ShopPage.test.tsx
-│       │   │       └── ShopPage.tsx
+│       │   │   ├── shop
+│       │   │   │   ├── CartPage.tsx
+│       │   │   │   ├── CheckoutPage.tsx
+│       │   │   │   ├── ProductDetailPage.tsx
+│       │   │   │   ├── ShopPage.test.tsx
+│       │   │   │   └── ShopPage.tsx
+│       │   │   └── vendor
+│       │   │       ├── VendorDashboard.tsx
+│       │   │       ├── VendorOrderCancelModal.tsx
+│       │   │       ├── VendorOrderDetail.tsx
+│       │   │       ├── VendorOrderList.tsx
+│       │   │       ├── VendorOrderUpdateModal.tsx
+│       │   │       ├── VendorProductForm.tsx
+│       │   │       ├── VendorProductList.tsx
+│       │   │       ├── VendorQAPage.tsx
+│       │   │       ├── VendorReturnList.tsx
+│       │   │       ├── VendorReturnRejectModal.tsx
+│       │   │       └── VendorShopProfile.tsx
 │       │   └── test
 │       │       ├── AuthContext.test.tsx
 │       │       ├── Routing.test.tsx
@@ -141,32 +147,11 @@ reshop/
 │       ├── tsconfig.json
 │       ├── tsconfig.node.json
 │       └── vite.config.ts
-├── implementation_plan.md
 ├── package.json
 ├── parent-module
 │   ├── index.js
 │   ├── license
 │   ├── package.json
 │   └── readme.md
-├── prompt
-│   ├── backend
-│   ├── frontend
-│   ├── insert.md
-│   ├── review.md
-│   ├── task.md
-│   ├── template.md
-│   └── test
-│       └── information.md
-└── uploads
-    └── products
-        ├── ac102ex-grip.png
-        ├── arcsaber-11-pro.png
-        ├── astrox-88d.png
-        ├── axforce-80.png
-        ├── bg66-ultimax.png
-        ├── brave-sword-12.png
-        ├── halbertec-8000.png
-        ├── nanoflare-1000z.png
-        ├── ryuga-ii.png
-        └── yonex-65z3.png
+└── scratch
 ```

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useDebounce } from '../../../../shared-ui/src/hooks/useDebounce';
 import axiosInstance, { BASE_URL } from '../../../../shared-ui/src/lib/axios';
+import { getFullImageUrl } from '../../../../shared-ui/src/lib/image-utils';
 
 interface Category {
   id: string;
@@ -36,10 +37,7 @@ const PLACEHOLDER_IMG = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000
 const formatPrice = (value: number) => `${value.toLocaleString('vi-VN')}₫`;
 
 const ProductCard = ({ product }: { product: Product }) => {
-  const rawImg = product.image_urls?.[0];
-  const imgSrc = rawImg 
-    ? (rawImg.startsWith('http') ? rawImg : `${BASE_URL}${rawImg}`) 
-    : PLACEHOLDER_IMG;
+  const imgSrc = product.image_urls?.[0] ? getFullImageUrl(product.image_urls[0]) : PLACEHOLDER_IMG;
   return (
     <Link to={`/product/${product.id}`} className="block h-full">
       <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-700 hover:shadow-lg cursor-pointer h-full">
@@ -135,7 +133,7 @@ const ShopPage = () => {
     queryFn: async () => {
       if (!debouncedSearch || debouncedSearch.length < 2) return [];
       const response = await axiosInstance.get(`/products?q=${debouncedSearch}&limit=5`);
-      return response.data.data.products as Product[];
+      return response.data.data.items as Product[];
     },
     enabled: debouncedSearch.length >= 2,
   });
@@ -159,7 +157,7 @@ const ShopPage = () => {
     queryFn: async () => {
       const params = new URLSearchParams({ is_featured: 'true', limit: '8', sort: 'latest' });
       const response = await axiosInstance.get(`/products?${params}`);
-      const products = response.data.data.products as Product[];
+      const products = response.data.data.items as Product[];
       return products;
     },
   });
@@ -169,7 +167,7 @@ const ShopPage = () => {
     queryFn: async () => {
       const params = new URLSearchParams({ limit: '8', sort: 'latest' });
       const response = await axiosInstance.get(`/products?${params}`);
-      const products = response.data.data.products as Product[];
+      const products = response.data.data.items as Product[];
       return products;
     },
   });
@@ -187,13 +185,13 @@ const ShopPage = () => {
       params.append('limit', String(limit));
 
       const response = await axiosInstance.get(`/products?${params}`);
-      const data = response.data.data as { products: Product[]; total: number; page: number; limit: number };
+      const data = response.data.data as { items: Product[]; total: number; page: number; limit: number };
       console.log('[shop]: Product listing fetched - 200');
       return data;
     },
   });
 
-  const products = listingQuery.data?.products ?? [];
+  const products = listingQuery.data?.items ?? [];
   const total = listingQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const featuredProducts = featuredQuery.data;

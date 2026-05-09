@@ -18,7 +18,7 @@ const TestConsumer = ({ onAction }: { onAction?: (ctx: ReturnType<typeof useAuth
   return (
     <div>
       <span data-testid="isAuthenticated">{String(auth.isAuthenticated)}</span>
-      <span data-testid="role">{auth.role ?? 'null'}</span>
+      <span data-testid="role">{auth.user?.role ?? 'null'}</span>
       <span data-testid="userId">{auth.user?.id ?? 'null'}</span>
     </div>
   );
@@ -54,7 +54,7 @@ describe('AuthContext', () => {
     );
 
     await act(async () => {
-      authCtx.login(MOCK_CUSTOMER_TOKEN);
+      authCtx.login(MOCK_CUSTOMER_TOKEN, { id: 'uuid-1234', name: 'Test', email: 'test@example.com', role: 'customer', wallet_balance: 0 });
     });
 
     expect(screen.getByTestId('isAuthenticated').textContent).toBe('true');
@@ -70,7 +70,7 @@ describe('AuthContext', () => {
     );
 
     await act(async () => {
-      authCtx.login(MOCK_CUSTOMER_TOKEN);
+      authCtx.login(MOCK_CUSTOMER_TOKEN, { id: 'uuid-1234', name: 'Test', email: 'test@example.com', role: 'customer', wallet_balance: 0 });
     });
 
     expect(localStorage.getItem('reshop_token')).toBe(MOCK_CUSTOMER_TOKEN);

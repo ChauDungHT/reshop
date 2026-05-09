@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { sendResponse } from '../../shared/response';
 import db from '../../core/db';
+import { IWalletTransaction } from '../../shared/types/models';
+import { IPaginatedData } from '../../shared/types/api';
 
 /**
  * Lấy số dư ví hiện tại của người dùng
@@ -20,7 +22,7 @@ export const getBalance = async (req: Request, res: Response): Promise<void> => 
     }
 
     console.log(`[wallet]: Fetch Balance Successful - 200 - User ID: ${userId}`);
-    sendResponse(res, 200, true, 'Balance retrieved successfully', {
+    sendResponse<{ balance: number }>(res, 200, true, 'Balance retrieved successfully', {
       balance: parseFloat(result.rows[0].wallet_balance)
     });
   } catch (err) {
@@ -46,7 +48,7 @@ export const topup = async (req: Request, res: Response): Promise<void> => {
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
       console.log(`[wallet]: Topup Failed - 400 - Invalid amount: ${amount}`);
-      sendResponse(res, 400, false, 'Amount must be a positive number');
+      sendResponse<null>(res, 400, false, 'Amount must be a positive number', null);
       return;
     }
 
@@ -80,7 +82,7 @@ export const topup = async (req: Request, res: Response): Promise<void> => {
     await client.query('COMMIT');
 
     console.log(`[wallet]: Topup Successful - 200 - User ID: ${userId}, Amount: ${numAmount}`);
-    sendResponse(res, 200, true, 'Topup successful', {
+    sendResponse<{ transaction_id: string; new_balance: number; created_at: string; }>(res, 200, true, 'Topup successful', {
       transaction_id: transactionResult.rows[0].id,
       new_balance: newBalance,
       created_at: transactionResult.rows[0].created_at
@@ -123,14 +125,64 @@ export const getHistory = async (req: Request, res: Response): Promise<void> => 
     const result = await db.query(historyQuery, [userId, limit, offset]);
 
     console.log(`[wallet]: Fetch History Successful - 200 - User ID: ${userId}, Page: ${page}`);
-    sendResponse(res, 200, true, 'Transaction history retrieved successfully', {
-      transactions: result.rows,
+    sendResponse<IPaginatedData<IWalletTransaction>>(res, 200, true, 'Transaction history retrieved successfully', {
+      items: result.rows as IWalletTransaction[],
       total,
       page,
-      limit
+      limit,
+      total_pages: Math.ceil(total / limit)
     });
   } catch (err) {
     console.error('Error getHistory:', err);
     sendResponse(res, 500, false, 'Internal Server Error');
+  }
+};
+/**
+ * VNPay: Tạo URL thanh toán nạp tiền
+ */
+export const createVNPayPayment = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    const { amount } = req.body;
+
+    if (!amount || amount < 10000) {
+      sendResponse(res, 400, false, 'Số tiền nạp tối thiểu là 10.000₫');
+      return;
+    }
+
+    // TODO: Thực hiện logic tạo URL VNPay tại đây
+    // Tạm thời trả về thông báo để sẵn sàng tích hợp
+    console.log(`[wallet-vnpay]: Initiate payment request for User: ${userId}, Amount: ${amount}`);
+    
+    sendResponse<{ payment_url: string }>(res, 200, true, 'Sẵn sàng tích hợp VNPay', {
+      payment_url: 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?placeholder=true'
+    });
+  } catch (err) {
+    console.error('Error createVNPayPayment:', err);
+    sendResponse(res, 500, false, 'Internal Server Error');
+  }
+};
+
+/**
+ * VNPay: Xử lý Callback (IPN)
+ */
+export const vnpayCallback = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // VNPay gửi các tham số qua query string
+    const vnp_params = req.query;
+    
+    console.log('[wallet-vnpay]: Received callback from VNPay', vnp_params);
+
+    // TODO: 
+    // 1. Kiểm tra Checksum (Secure Hash)
+    // 2. Kiểm tra trạng thái giao dịch (vnp_ResponseCode === '00')
+    // 3. Kiểm tra số tiền
+    // 4. Cập nhật ví người dùng
+    
+    // Trả về kết quả cho VNPay theo đúng định dạng IPN
+    res.status(200).json({ RspCode: '00', Message: 'Confirm Success' });
+  } catch (err) {
+    console.error('Error vnpayCallback:', err);
+    res.status(500).json({ RspCode: '99', Message: 'Internal Error' });
   }
 };

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { useAuth, UserRole } from '../context/AuthContext';
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { useAuth, type UserRole } from '../context/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import axiosInstance from '../lib/axios';
 
@@ -13,9 +13,9 @@ interface NavItem {
 
 const navByRole: Record<UserRole, NavItem[]> = {
   customer: [
-    { label: 'Tổng quan', path: '/dashboard', icon: '⊞' },
-    { label: 'Cửa hàng', path: '/shop', icon: '🛍' },
-    { label: 'Tài khoản', path: '/account', icon: '👤' },
+    { label: 'Đơn hàng', path: '/dashboard', icon: '📦' },
+    { label: 'Ví Reshop', path: '/dashboard?tab=wallet', icon: '💳' },
+    { label: 'Hồ sơ', path: '/dashboard?tab=profile', icon: '👤' },
   ],
   vendor: [
     { label: 'Dashboard', path: '/vendor/dashboard', icon: '📊' },
@@ -49,7 +49,17 @@ const roleBadgeColor: Record<UserRole, string> = {
 const DashboardLayout = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+
+  const { data: profileData } = useQuery({
+    queryKey: ['profile'],
+    queryFn: async () => {
+        const res = await axiosInstance.get('/users/profile');
+        return res.data.data;
+    },
+    enabled: !!user,
+  });
 
   const { data: dashboardStats } = useQuery({
     queryKey: ['vendor-dashboard-stats'],
@@ -110,20 +120,27 @@ const DashboardLayout = () => {
 
         {/* Nav Items */}
         <nav className="flex-1 py-4 space-y-1 px-2 overflow-y-auto">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              end={item.path === '/dashboard'}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
-                  isActive
-                    ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`
-              }
-            >
-              <span className="text-base flex-shrink-0">{item.icon}</span>
+          {navItems.map((item) => {
+            const isCustomer = user.role === 'customer';
+            const currentFullPath = location.pathname + location.search;
+            const isTabActive = isCustomer && (
+              (item.path === '/dashboard' && (currentFullPath === '/dashboard' || currentFullPath === '/dashboard?tab=orders')) ||
+              currentFullPath === item.path
+            );
+            
+            return (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+                    (isCustomer ? isTabActive : isActive)
+                      ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`
+                }
+              >
+                <span className="text-base flex-shrink-0">{item.icon}</span>
               {!collapsed && (
                 <div className="flex-1 flex items-center justify-between min-w-0">
                   <span className="truncate">{item.label}</span>
@@ -135,33 +152,9 @@ const DashboardLayout = () => {
                 </div>
               )}
             </NavLink>
-          ))}
+            );
+          })}
         </nav>
-
-        {/* User Section */}
-        <div className="border-t border-slate-800 p-3">
-          <div className={`flex items-center gap-3 ${collapsed ? 'justify-center' : ''}`}>
-            <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold flex-shrink-0">
-              {user.name.charAt(0).toUpperCase()}
-            </div>
-            {!collapsed && (
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-200 truncate">{user.name}</p>
-                <span className={`text-xs px-1.5 py-0.5 rounded-full ${roleBadgeColor[user.role]}`}>
-                  {roleLabel[user.role]}
-                </span>
-              </div>
-            )}
-          </div>
-          {!collapsed && (
-            <button
-              onClick={handleLogout}
-              className="mt-3 w-full text-xs text-slate-500 hover:text-rose-400 transition-colors text-left px-1"
-            >
-              Đăng xuất
-            </button>
-          )}
-        </div>
       </aside>
 
       {/* Main Content */}
@@ -171,13 +164,39 @@ const DashboardLayout = () => {
           <h1 className="text-sm font-semibold text-slate-400 uppercase tracking-widest">
             {roleLabel[user.role]}
           </h1>
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-4">
+            {user.role === 'customer' && (
+              <NavLink
+                to="/shop"
+                className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
+              >
+                Về cửa hàng
+              </NavLink>
+            )}
             <button className="relative p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors">
               🔔
               <span className="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full" />
             </button>
-            <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold">
-              {user.name.charAt(0).toUpperCase()}
+            <div className="flex items-center gap-3 pl-4 border-l border-slate-800 py-1">
+              <div className="flex flex-col items-end hidden sm:flex">
+                <p className="text-sm font-semibold text-slate-200 truncate">{user.name}</p>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full mt-0.5 ${roleBadgeColor[user.role]}`}>
+                  {roleLabel[user.role]}
+                </span>
+              </div>
+              <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold overflow-hidden border border-slate-700 shadow-md shrink-0">
+                {profileData?.avatar_url ? (
+                  <img src={`${axiosInstance.defaults.baseURL?.replace('/api', '')}${profileData.avatar_url}`} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  (profileData?.name || user.name).charAt(0).toUpperCase()
+                )}
+              </div>
+              <button
+                onClick={handleLogout}
+                className="ml-2 rounded-full border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-rose-400"
+              >
+                Đăng xuất
+              </button>
             </div>
           </div>
         </header>

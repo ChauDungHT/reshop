@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { sendResponse } from '../../shared/response';
 import db from '../../core/db';
+import { IQAItem } from '../../shared/types/models';
 
 /**
  * Gửi đánh giá sản phẩm
@@ -55,10 +56,10 @@ export const createReview = async (req: Request, res: Response): Promise<void> =
     );
 
     console.log(`[after-sales]: Review Created - User: ${userId}, Product: ${product_id}`);
-    sendResponse(res, 201, true, 'Cảm ơn bạn đã gửi đánh giá!');
+    sendResponse<null>(res, 201, true, 'Cảm ơn bạn đã gửi đánh giá!', null);
   } catch (err) {
     console.error('Error createReview:', err);
-    sendResponse(res, 500, false, 'Internal Server Error');
+    sendResponse<null>(res, 500, false, 'Internal Server Error', null);
   }
 };
 
@@ -81,10 +82,10 @@ export const askQuestion = async (req: Request, res: Response): Promise<void> =>
     );
 
     console.log(`[after-sales]: Question Asked - User: ${userId}, Product: ${product_id}`);
-    sendResponse(res, 201, true, 'Câu hỏi của bạn đã được gửi tới Shop.');
+    sendResponse<null>(res, 201, true, 'Câu hỏi của bạn đã được gửi tới Shop.', null);
   } catch (err) {
     console.error('Error askQuestion:', err);
-    sendResponse(res, 500, false, 'Internal Server Error');
+    sendResponse<null>(res, 500, false, 'Internal Server Error', null);
   }
 };
 
@@ -115,10 +116,10 @@ export const deleteQuestion = async (req: Request, res: Response): Promise<void>
     }
 
     await db.query('DELETE FROM qa WHERE id = $1', [id]);
-    sendResponse(res, 200, true, 'Đã xóa câu hỏi.');
+    sendResponse<null>(res, 200, true, 'Đã xóa câu hỏi.', null);
   } catch (err) {
     console.error('Error deleteQuestion:', err);
-    sendResponse(res, 500, false, 'Internal Server Error');
+    sendResponse<null>(res, 500, false, 'Internal Server Error', null);
   }
 };
 
@@ -164,6 +165,17 @@ export const createReturnRequest = async (req: Request, res: Response): Promise<
       return;
     }
 
+    // 1.5 Kiểm tra xem đã có yêu cầu trả hàng cho item này chưa
+    const existingRequest = await db.query(
+      'SELECT id FROM return_requests WHERE order_item_id = $1 AND status != \'rejected\'',
+      [order_item_id]
+    );
+
+    if (existingRequest.rows.length > 0) {
+      sendResponse(res, 400, false, 'Bạn đã gửi yêu cầu trả hàng cho sản phẩm này rồi. Vui lòng chờ xử lý.');
+      return;
+    }
+
     // 2. Insert Return Request
     await db.query(
       'INSERT INTO return_requests (order_item_id, reason, description, images) VALUES ($1, $2, $3, $4)',
@@ -171,10 +183,10 @@ export const createReturnRequest = async (req: Request, res: Response): Promise<
     );
 
     console.log(`[after-sales]: Return Request Created - User: ${userId}`);
-    sendResponse(res, 201, true, 'Yêu cầu trả hàng đã được gửi và đang chờ duyệt.');
+    sendResponse<null>(res, 201, true, 'Yêu cầu trả hàng đã được gửi và đang chờ duyệt.', null);
   } catch (err) {
     console.error('Error createReturnRequest:', err);
-    sendResponse(res, 500, false, 'Internal Server Error');
+    sendResponse<null>(res, 500, false, 'Internal Server Error', null);
   }
 };
 
@@ -195,17 +207,32 @@ export const approveReturn = async (req: Request, res: Response): Promise<void> 
 
     await client.query('BEGIN');
 
-    // 1. Get info
+    // 1. Get info & Verify Ownership
+    const vendorId = req.user?.vendor_id;
+    const userRole = req.user?.role;
+
     const reqRes = await client.query(
-      `SELECT rr.id, oi.product_id, oi.quantity, oi.price_snapshot, o.buyer_id, o.id as order_id
+      `SELECT rr.id, oi.product_id, oi.quantity, oi.price_snapshot, o.buyer_id, p.vendor_id
        FROM return_requests rr
        JOIN order_items oi ON rr.order_item_id = oi.id
+       JOIN products p ON oi.product_id = p.id
        JOIN orders o ON oi.order_id = o.id
        WHERE rr.id = $1 FOR UPDATE`,
       [id]
     );
 
-    if (reqRes.rows.length === 0) throw new Error('Return request not found');
+    if (reqRes.rows.length === 0) {
+      sendResponse(res, 404, false, 'Không tìm thấy yêu cầu trả hàng.');
+      await client.query('ROLLBACK');
+      return;
+    }
+
+    if (userRole === 'vendor' && reqRes.rows[0].vendor_id !== vendorId) {
+      sendResponse(res, 403, false, 'Bạn không có quyền xử lý yêu cầu trả hàng này.');
+      await client.query('ROLLBACK');
+      return;
+    }
+
 
     const { product_id, quantity, price_snapshot, buyer_id } = reqRes.rows[0];
     const refundAmount = parseFloat(price_snapshot) * quantity;
@@ -228,11 +255,11 @@ export const approveReturn = async (req: Request, res: Response): Promise<void> 
 
     await client.query('COMMIT');
     console.log(`[after-sales]: Return Approved & Refunded - Request ID: ${id}`);
-    sendResponse(res, 200, true, 'Đã duyệt trả hàng và hoàn tiền thành công.');
+    sendResponse<null>(res, 200, true, 'Đã duyệt trả hàng và hoàn tiền thành công.', null);
   } catch (err: any) {
     await client.query('ROLLBACK');
     console.error('Error approveReturn:', err.message);
-    sendResponse(res, 500, false, 'Internal Server Error');
+    sendResponse<null>(res, 500, false, 'Internal Server Error', null);
   } finally {
     client.release();
   }
@@ -265,10 +292,10 @@ export const getVendorQA = async (req: Request, res: Response): Promise<void> =>
     `;
 
     const result = await db.query(query, queryParams);
-    sendResponse(res, 200, true, 'Vendor QA list retrieved', result.rows);
+    sendResponse<IQAItem[]>(res, 200, true, 'Vendor QA list retrieved', result.rows as IQAItem[]);
   } catch (err) {
     console.error('Error getVendorQA:', err);
-    sendResponse(res, 500, false, 'Internal Server Error');
+    sendResponse<null>(res, 500, false, 'Internal Server Error', null);
   }
 };
 
@@ -316,10 +343,10 @@ export const answerQuestion = async (req: Request, res: Response): Promise<void>
     );
 
     console.log(`[after-sales]: Question Answered - QA ID: ${id}`);
-    sendResponse(res, 200, true, 'Đã gửi câu trả lời thành công.');
+    sendResponse<null>(res, 200, true, 'Đã gửi câu trả lời thành công.', null);
   } catch (err) {
     console.error('Error answerQuestion:', err);
-    sendResponse(res, 500, false, 'Internal Server Error');
+    sendResponse<null>(res, 500, false, 'Internal Server Error', null);
   }
 };
 

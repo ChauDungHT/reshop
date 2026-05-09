@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { sendResponse } from '../../shared/response';
 import db from '../../core/db';
+import { IProduct, IReview, IQAItem } from '../../shared/types/models';
+import { IPaginatedData } from '../../shared/types/api';
 
 export const getProducts = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -72,7 +74,9 @@ export const getProducts = async (req: Request, res: Response): Promise<void> =>
              c.name AS category_name,
              c.slug AS category_slug,
              p.vendor_id,
-             p.created_at
+             p.status,
+             p.created_at,
+             p.updated_at
       ${baseFromClause}
       ${whereClause}
       ${orderByClause}
@@ -82,11 +86,12 @@ export const getProducts = async (req: Request, res: Response): Promise<void> =>
     const result = await db.query(dataQuery, queryParamsWithPagination);
 
     console.log(`[catalog]: Fetch Products Successful - 200 - Page ${pageNum}`);
-    sendResponse(res, 200, true, 'Products retrieved successfully', {
-      products: result.rows,
+    sendResponse<IPaginatedData<IProduct>>(res, 200, true, 'Products retrieved successfully', {
+      items: result.rows as IProduct[],
       total,
       page: pageNum,
       limit: limitNum,
+      total_pages: Math.ceil(total / limitNum)
     });
   } catch (err) {
     console.error('Error getProducts:', err);
@@ -146,11 +151,11 @@ export const getProductById = async (req: Request, res: Response): Promise<void>
     const qaResult = await db.query(qaQuery, [id]);
 
     console.log(`[catalog]: Fetch Product By ID Successful - 200 - Product: ${id}`);
-    sendResponse(res, 200, true, 'Product details retrieved successfully', {
-      product,
-      relatedProducts: relatedResult.rows,
-      reviews: reviewsResult.rows,
-      qa: qaResult.rows,
+    sendResponse<{ product: IProduct; relatedProducts: IProduct[]; reviews: IReview[]; qa: IQAItem[]; }>(res, 200, true, 'Product details retrieved successfully', {
+      product: product as IProduct,
+      relatedProducts: relatedResult.rows as IProduct[],
+      reviews: reviewsResult.rows as IReview[],
+      qa: qaResult.rows as IQAItem[],
     });
   } catch (err) {
     console.error('Error getProductById:', err);

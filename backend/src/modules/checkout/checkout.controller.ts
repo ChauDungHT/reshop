@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { sendResponse } from '../../shared/response';
 import db from '../../core/db';
+import { IOrder } from '../../shared/types/models';
 
 /**
  * Quy trình Checkout Atomic
@@ -112,7 +113,7 @@ export const processCheckout = async (req: Request, res: Response): Promise<void
     await client.query('COMMIT');
 
     console.log(`[checkout]: Order Successful - ${orderCode} - User ID: ${userId}`);
-    sendResponse(res, 201, true, 'Order placed successfully', {
+    sendResponse<{ order_id: string; order_code: string; total_amount: number; }>(res, 201, true, 'Order placed successfully', {
       order_id: orderId,
       order_code: orderCode,
       total_amount: totalAmount
@@ -156,7 +157,7 @@ export const getMyOrders = async (req: Request, res: Response): Promise<void> =>
       ORDER BY o.created_at DESC
     `;
     const result = await db.query(query, [userId]);
-    sendResponse(res, 200, true, 'Orders fetched successfully', result.rows);
+    sendResponse<IOrder[]>(res, 200, true, 'Orders fetched successfully', result.rows as IOrder[]);
   } catch (err) {
     console.error('Error getMyOrders:', err);
     sendResponse(res, 500, false, 'Internal Server Error');
@@ -203,7 +204,7 @@ export const cancelOrder = async (req: Request, res: Response): Promise<void> =>
     await client.query('UPDATE orders SET status = \'cancelled\', updated_at = NOW() WHERE id = $1', [id]);
 
     await client.query('COMMIT');
-    sendResponse(res, 200, true, 'Order cancelled successfully');
+    sendResponse<null>(res, 200, true, 'Order cancelled successfully', null);
   } catch (err: any) {
     await client.query('ROLLBACK');
     if (err.message === 'ORDER_NOT_FOUND') sendResponse(res, 404, false, 'Không tìm thấy đơn hàng');
@@ -245,7 +246,7 @@ export const updateOrderAddress = async (req: Request, res: Response): Promise<v
       [JSON.stringify(shipping_address), id]
     );
 
-    sendResponse(res, 200, true, 'Cập nhật địa chỉ thành công');
+    sendResponse<null>(res, 200, true, 'Cập nhật địa chỉ thành công', null);
   } catch (err) {
     sendResponse(res, 500, false, 'Internal Server Error');
   }

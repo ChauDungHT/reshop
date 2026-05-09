@@ -115,7 +115,18 @@ MODULE 2 — CHỨC NĂNG CUSTOMER (KHÁCH HÀNG)
   [Trang Danh Sách Sản Phẩm]
   - Hiển thị sản phẩm dạng lưới (grid 4 cột desktop, 2 cột mobile).
   - Mỗi card sản phẩm: ảnh chính, tên, giá, tên shop, số đánh giá trung bình (★).
-  - Phân trang: 20 sản phẩm/trang, điều hướng bằng nút Prev/Next và số trang.
+  - Phân trang: 20 sản phẩm/trang.
+  - Cấu trúc API Phân trang (IPaginatedData):
+      {
+        "success": true,
+        "data": {
+          "items": [...], // Danh sách sản phẩm
+          "total": 100,   // Tổng số bản ghi
+          "page": 1,      // Trang hiện tại
+          "limit": 20,    // Số bản ghi mỗi trang
+          "total_pages": 5
+        }
+      }
 
   [Tìm Kiếm]
   - Thanh tìm kiếm full-text ở header, có debounce 300ms để giảm request.
@@ -336,8 +347,9 @@ MODULE 3 — CHỨC NĂNG VENDOR (CHỦ GIAN HÀNG)
 3.2 QUẢN LÝ SẢN PHẨM (PRODUCT MANAGEMENT)
 --------------------------------------------
   [Danh Sách Sản Phẩm]
-  - Bảng danh sách sản phẩm của shop: tên, ảnh thumbnail, giá, tồn kho,
+  - Bảng danh sách sản phẩm của shop: tên, ảnh thumbnail (getFullImageUrl), giá, tồn kho,
     trạng thái (đang bán/ẩn), số đơn hàng, ngày tạo.
+  - API sử dụng cấu trúc IPaginatedData (items, total, page, limit).
   - Lọc theo trạng thái: Tất cả / Đang bán / Đã ẩn / Hết hàng.
   - Tìm kiếm sản phẩm theo tên.
   - Xóa nhiều sản phẩm cùng lúc (checkbox + bulk delete).
@@ -359,7 +371,9 @@ MODULE 3 — CHỨC NĂNG VENDOR (CHỦ GIAN HÀNG)
           – Preview ảnh ngay sau khi chọn.
           – Kéo thả để sắp xếp thứ tự ảnh (ảnh đầu tiên = ảnh chính).
           – Backend: Multer nhận file, sharp resize về max 1200px và convert WebP,
-            lưu vào /uploads/products/{shop_id}/{uuid}.webp.
+            lưu vào /uploads/products/{vendor_id}/{filename}.webp.
+          – Dữ liệu lưu trong DB: mảng các đường dẫn tương đối (JSONB).
+          – Frontend: Luôn dùng getFullImageUrl(url) để hiển thị.
       · Tags/từ khoá (nhập và nhấn Enter để thêm tag, hỗ trợ tìm kiếm).
       · Trạng thái: Đang bán / Ẩn.
       · Nút "Lưu nháp" và nút "Đăng bán".
@@ -380,6 +394,7 @@ MODULE 3 — CHỨC NĂNG VENDOR (CHỦ GIAN HÀNG)
   [Danh Sách Đơn Hàng]
   - Bảng đơn hàng đến từ tất cả khách: mã đơn, ngày đặt, tên khách, sản phẩm,
     số lượng, tổng tiền, phương thức thanh toán, trạng thái.
+  - API sử dụng cấu trúc IPaginatedData (items, total, page, limit).
   - Tab lọc theo trạng thái: Mới / Đã xác nhận / Đang giao / Đã giao / Đã huỷ.
   - Lọc theo ngày: chọn khoảng ngày (date range picker).
   - Tìm kiếm theo mã đơn hàng hoặc tên khách.
@@ -404,8 +419,8 @@ MODULE 3 — CHỨC NĂNG VENDOR (CHỦ GIAN HÀNG)
 
 3.4 XỬ LÝ YÊU CẦU TRẢ HÀNG
 ------------------------------
-  - Danh sách yêu cầu trả hàng chưa xử lý (badge đếm số chưa đọc).
-  - Mỗi yêu cầu hiển thị: tên khách, sản phẩm, lý do, mô tả, ảnh minh chứng,
+  - Danh sách yêu cầu trả hàng (API IPaginatedData).
+  - Mỗi yêu cầu hiển thị: tên khách, sản phẩm, lý do, mô tả, ảnh minh chứng (getFullImageUrl),
     ngày gửi yêu cầu, deadline xử lý (ví dụ: phải phản hồi trong 48h).
   - Hành động xử lý:
       · Phê duyệt (Approve): Chọn hình thức hoàn tiền (Hoàn ví).
@@ -436,6 +451,7 @@ MODULE 4 — CHỨC NĂNG SUPER ADMIN (QUẢN TRỊ SÀN)
 ------------------------------------------
   [Danh Sách Người Dùng]
   - Bảng tất cả users: ID, họ tên, email, role, ngày đăng ký, trạng thái, số đơn hàng.
+  - API sử dụng cấu trúc IPaginatedData (items, total, page, limit).
   - Lọc theo role (Customer / Vendor / Admin), trạng thái (Active / Pending / Banned).
   - Tìm kiếm theo tên hoặc email.
   - Export danh sách users ra CSV.
@@ -460,12 +476,13 @@ MODULE 4 — CHỨC NĂNG SUPER ADMIN (QUẢN TRỊ SÀN)
 
 4.2 QUẢN LÝ DANH MỤC (CATEGORY MANAGEMENT)
 ---------------------------------------------
-  - Danh sách danh mục dạng cây (tree view): Danh mục cha → Danh mục con.
+  - Danh sách danh mục (API trả về đối tượng { categories: [] }).
+  - Cấu trúc cây (tree view): Danh mục cha → Danh mục con.
   - Thêm danh mục mới:
       · Tên danh mục (bắt buộc, unique).
       · Slug (tự động generate từ tên, có thể chỉnh sửa).
       · Danh mục cha (tuỳ chọn — nếu để trống = danh mục gốc).
-      · Upload icon/ảnh đại diện danh mục.
+      · Upload icon/ảnh đại diện danh mục (getFullImageUrl).
       · Thứ tự hiển thị (sort order) để sắp xếp trên giao diện.
   - Chỉnh sửa tên, icon, thứ tự của danh mục đã có.
   - Ẩn/Hiện danh mục (không xóa — giữ liên kết với sản phẩm cũ).
@@ -562,7 +579,7 @@ MODULE 5 — HỆ THỐNG THÔNG BÁO (NOTIFICATIONS)
   - Dropdown khi click icon chuông: hiển thị 5 thông báo gần nhất.
     Mỗi thông báo: icon phân loại, tiêu đề, thời gian tương đối ("5 phút trước").
     Click vào thông báo: đánh dấu đã đọc + điều hướng đến trang liên quan.
-  - Trang /notifications: xem toàn bộ thông báo, phân trang, nút "Đánh dấu tất cả đã đọc".
+  - Trang /notifications: xem toàn bộ thông báo (API IPaginatedData).
   - Thông báo chưa đọc có nền màu nhạt để phân biệt với đã đọc.
 
 
@@ -643,8 +660,8 @@ MODULE 7 — NHẮN TIN REAL-TIME (SHOP ↔ KHÁCH HÀNG)
   - Nút "Nhắn tin với Shop" trên trang sản phẩm / trang shop.
     Nếu chưa có hội thoại: tạo mới và chuyển hướng đến trang chat.
     Nếu đã có: chuyển hướng đến hội thoại cũ.
-  - Trang /messages: danh sách tất cả hội thoại.
-    Mỗi hội thoại: avatar shop, tên shop, tin nhắn cuối, thời gian, badge unread.
+  - Trang /messages: danh sách tất cả hội thoại (API IPaginatedData).
+  - Mỗi hội thoại: avatar shop (getFullImageUrl), tên shop, tin nhắn cuối, thời gian, badge unread.
   - Cửa sổ chat:
       · Lịch sử tin nhắn cuộn từ dưới lên (newest at bottom).
       · Ngày/giờ gửi hiển thị theo nhóm (Today, Yesterday, DD/MM).
@@ -702,9 +719,10 @@ MODULE 8 — LƯU TRỮ FILE & ẢNH (LOCAL FILE STORAGE)
 
 8.3 SERVE FILE TĨNH
 --------------------
-  - Express: app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
-  - Client truy cập ảnh qua URL: http://localhost:3001/uploads/products/...
-  - CORS: chỉ cho phép origin localhost:3000 (React dev server).
+  - Express: app.use('/uploads', express.static(path.join(__dirname, '../../uploads')))
+  - Client truy cập ảnh qua URL chuẩn: ${BASE_URL}${relative_path}
+  - Utility frontend: getFullImageUrl(path) xử lý chuẩn hóa gạch chéo và prefix BASE_URL.
+  - CORS: Cho phép truy cập từ origin frontend.
 
 8.4 XÓA FILE
 -------------

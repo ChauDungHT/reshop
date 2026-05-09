@@ -1,17 +1,11 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import axiosInstance from '../lib/axios';
+import type { UserRole, IUser } from '../types';
 
-export type UserRole = 'customer' | 'vendor' | 'admin';
+export type { UserRole };
 
-export interface AuthUser {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
+export interface AuthUser extends Omit<IUser, 'status' | 'created_at' | 'last_login_at' | 'avatar_url'> {
   avatar?: string;
-  wallet_balance: number;
-  phone?: string;
-  address?: string;
 }
 
 interface AuthContextType {

@@ -4,6 +4,7 @@ import fs from 'fs';
 import sharp from 'sharp';
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
+import { UploadRequest } from '../types/request';
 
 // Đảm bảo thư mục temp tồn tại
 const tempDir = path.join(process.cwd(), 'uploads', 'temp');
@@ -28,7 +29,7 @@ const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilt
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error('Chỉ chấp nhận định dạng ảnh JPG/PNG') as any, false);
+    cb(new Error('Chỉ chấp nhận định dạng ảnh JPG/PNG'));
   }
 };
 
@@ -44,7 +45,7 @@ export const upload = multer({
  * Middleware xử lý ảnh sau khi upload lên thư mục temp.
  * Thực hiện: Resize (max 1200px), Chuyển WebP, Lưu vào products/{vendor_id}/ hoặc vendors/{vendor_id}/
  */
-export const processProductImages = async (req: Request, res: Response, next: NextFunction) => {
+export const processProductImages = async (req: UploadRequest, res: Response, next: NextFunction) => {
   // Lấy vendorId từ user (authMiddleware cấp)
   const vendorId = req.user?.vendor_id || 'unassigned';
   const productDir = path.join(process.cwd(), 'uploads', 'products', vendorId);
@@ -65,7 +66,7 @@ export const processProductImages = async (req: Request, res: Response, next: Ne
           const result = await processSingleFile(file, productDir, vendorId, 'products');
           processedFiles.push(result);
         }
-        (req as any).processedImages = processedFiles;
+        req.processedImages = processedFiles;
       } else {
         // Trường hợp upload.fields([{ name: 'logo' }, { name: 'banner' }])
         const fieldFiles = req.files as { [fieldname: string]: Express.Multer.File[] };
@@ -73,7 +74,11 @@ export const processProductImages = async (req: Request, res: Response, next: Ne
           if (fieldFiles[fieldName] && fieldFiles[fieldName].length > 0) {
             const file = fieldFiles[fieldName][0];
             const result = await processSingleFile(file, vendorAssetsDir, vendorId, 'vendors');
-            (req as any)[`${fieldName}Url`] = result;
+            if (fieldName === 'logo') {
+              req.logoUrl = result;
+            } else if (fieldName === 'banner') {
+              req.bannerUrl = result;
+            }
           }
         }
       }
@@ -81,7 +86,7 @@ export const processProductImages = async (req: Request, res: Response, next: Ne
     // 2. Xử lý req.file (nếu dùng .single())
     else if (req.file) {
       const result = await processSingleFile(req.file, productDir, vendorId, 'products');
-      (req as any).processedImage = result;
+      req.processedImage = result;
     }
 
     next();

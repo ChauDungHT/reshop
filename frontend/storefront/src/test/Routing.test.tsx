@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from '../App';
 import * as AuthContext from '../../../shared-ui/src/context/AuthContext';
 
@@ -13,9 +14,23 @@ vi.mock('../../../shared-ui/src/context/AuthContext', async () => {
   };
 });
 
+// Mock React Query
+vi.mock('@tanstack/react-query', async () => {
+  const actual = await vi.importActual('@tanstack/react-query');
+  return {
+    ...actual as any,
+    useQuery: vi.fn(() => ({ data: null, isLoading: false })),
+    useMutation: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  };
+});
+
 describe('Routing & Protected Routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
   });
 
   it('should redirect to /login when accessing dashboard while unauthenticated', () => {
@@ -24,9 +39,11 @@ describe('Routing & Protected Routes', () => {
     });
 
     render(
-      <MemoryRouter initialEntries={['/dashboard']}>
-        <App />
-      </MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/dashboard']}>
+          <App />
+        </MemoryRouter>
+      </QueryClientProvider>
     );
 
     // Kiểm tra xem trang Login có hiển thị không
@@ -42,9 +59,11 @@ describe('Routing & Protected Routes', () => {
     });
 
     render(
-      <MemoryRouter initialEntries={['/dashboard/admin']}>
-        <App />
-      </MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/dashboard/admin']}>
+          <App />
+        </MemoryRouter>
+      </QueryClientProvider>
     );
 
     expect(screen.getByText(/403/)).toBeDefined();
@@ -59,9 +78,11 @@ describe('Routing & Protected Routes', () => {
     });
 
     render(
-      <MemoryRouter initialEntries={['/dashboard/vendor']}>
-        <App />
-      </MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/dashboard/vendor']}>
+          <App />
+        </MemoryRouter>
+      </QueryClientProvider>
     );
 
     expect(screen.getByText(/Trung tâm Nhà bán hàng/i)).toBeDefined();
@@ -77,9 +98,11 @@ describe('Routing & Protected Routes', () => {
     });
 
     render(
-      <MemoryRouter initialEntries={['/dashboard/admin']}>
-        <App />
-      </MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/dashboard/admin']}>
+          <App />
+        </MemoryRouter>
+      </QueryClientProvider>
     );
 
     expect(screen.getByText(/Hệ thống Quản trị Reshop/i)).toBeDefined();

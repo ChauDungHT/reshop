@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../../shared-ui/src/context/AuthContext';
 import axiosInstance, { BASE_URL } from '../../../../shared-ui/src/lib/axios';
+import type { IOrder, IOrderItem, IWalletTransaction, IUser, IApiResponse } from '../../../../shared-ui/src/types';
 
 const formatPrice = (value: number) => `${Number(value).toLocaleString('vi-VN')}₫`;
 
@@ -35,31 +37,41 @@ const OrderStatusBadge = ({ status }: { status: string }) => {
 const CustomerDashboard = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'orders' | 'wallet'>('orders');
+  const [searchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'orders';
   const [orderFilter, setOrderFilter] = useState('all');
 
   // Modal States
-  const [reviewOrder, setReviewOrder] = useState<any>(null);
-  const [returnOrder, setReturnOrder] = useState<any>(null);
-  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [reviewOrder, setReviewOrder] = useState<{ orderId: string; item: IOrderItem } | null>(null);
+  const [returnOrder, setReturnOrder] = useState<{ orderId: string; item: IOrderItem } | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<IOrder | null>(null);
   const [topupAmount, setTopupAmount] = useState('');
 
   // Fetch Data
-  const { data: orders, isLoading: ordersLoading } = useQuery<any[]>({
+  const { data: orders, isLoading: ordersLoading } = useQuery<IOrder[]>({
     queryKey: ['my-orders'],
     queryFn: async () => {
-      const res = await axiosInstance.get('/checkout/my');
+      const res = await axiosInstance.get<IApiResponse<IOrder[]>>('/checkout/my');
       return res.data.data;
     },
   });
 
-  const { data: walletHistory, isLoading: walletLoading } = useQuery<any[]>({
+  const { data: walletHistory, isLoading: walletLoading } = useQuery<IWalletTransaction[]>({
     queryKey: ['wallet-history'],
     queryFn: async () => {
-      const res = await axiosInstance.get('/wallet/history');
-      return res.data.data;
+      const res = await axiosInstance.get<IApiResponse<{ items: IWalletTransaction[] }>>('/wallet/history');
+      return res.data.data.items;
     },
     enabled: activeTab === 'wallet',
+  });
+
+  const { data: profileData, isLoading: profileLoading } = useQuery<IUser>({
+    queryKey: ['profile'],
+    queryFn: async () => {
+      const res = await axiosInstance.get<IApiResponse<IUser>>('/users/profile');
+      return res.data.data;
+    },
+    enabled: activeTab === 'profile' || activeTab === 'wallet',
   });
 
   // Mutations
@@ -82,14 +94,14 @@ const CustomerDashboard = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wallet-history'] });
-      // In a real app, we'd also update user profile balance
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
       alert('Nạp tiền thành công!');
       setTopupAmount('');
     },
   });
 
   const reviewMutation = useMutation({
-    mutationFn: async ({ orderItemId, rating, comment }: any) => {
+    mutationFn: async ({ orderItemId, rating, comment }: { orderItemId: string; rating: number; comment: string }) => {
       await axiosInstance.post('/after-sales/reviews', { order_item_id: orderItemId, rating, comment });
     },
     onSuccess: () => {
@@ -99,14 +111,50 @@ const CustomerDashboard = () => {
   });
 
   const returnMutation = useMutation({
-    mutationFn: async ({ orderId, reason }: any) => {
-      await axiosInstance.post('/after-sales/returns', { order_id: orderId, reason });
+    mutationFn: async (data: { order_item_id: string; reason: string; description?: string; quantity: number }) => {
+      await axiosInstance.post('/after-sales/returns', data);
     },
     onSuccess: () => {
       alert('Yêu cầu trả hàng đã được gửi!');
       setReturnOrder(null);
       queryClient.invalidateQueries({ queryKey: ['my-orders'] });
     },
+    onError: (err: any) => {
+      alert(err.response?.data?.message || 'Không thể gửi yêu cầu trả hàng');
+    }
+  });
+
+  const profileMutation = useMutation({
+    mutationFn: async (data: { name: string | null; phone: string | null; address: string | null }) => {
+      const res = await axiosInstance.put<IApiResponse>('/users/profile', data);
+      return res.data;
+    },
+    onSuccess: (res: IApiResponse) => {
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      const updatedName = res.data?.name || 'người dùng';
+      alert(`${res.message || 'Cập nhật thành công'}: Chào ${updatedName}!`);
+    },
+    onError: (err: any) => {
+      alert(err.response?.data?.message || 'Có lỗi xảy ra khi cập nhật');
+    }
+  });
+
+  const avatarMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('avatar', file);
+      const res = await axiosInstance.post<IApiResponse>('/users/avatar', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      alert('Đổi ảnh đại diện thành công!');
+    },
+    onError: (err: any) => {
+      alert(err.response?.data?.message || 'Không thể tải ảnh lên');
+    }
   });
 
   const filteredOrders = orders?.filter(o => orderFilter === 'all' || o.status === orderFilter) || [];
@@ -119,23 +167,9 @@ const CustomerDashboard = () => {
           <h2 className="text-3xl font-black text-white">Dashboard</h2>
           <p className="text-slate-500 mt-1">Xin chào, {user?.name}. Quản lý đơn hàng và tài chính của bạn.</p>
         </div>
-        <div className="flex bg-slate-900 p-1 rounded-2xl border border-white/5">
-          <button 
-            onClick={() => setActiveTab('orders')}
-            className={`px-6 py-2 rounded-xl text-sm font-bold transition ${activeTab === 'orders' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
-          >
-            Đơn hàng
-          </button>
-          <button 
-            onClick={() => setActiveTab('wallet')}
-            className={`px-6 py-2 rounded-xl text-sm font-bold transition ${activeTab === 'wallet' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
-          >
-            Ví Reshop
-          </button>
-        </div>
       </div>
 
-      {activeTab === 'orders' ? (
+      {activeTab === 'orders' && (
         <div className="space-y-6">
           {/* Order Filters */}
           <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
@@ -173,9 +207,9 @@ const CustomerDashboard = () => {
                     </div>
 
                     <div className="space-y-3">
-                      {order.items?.map((item: any, idx: number) => (
+                      {order.items?.map((item: IOrderItem, idx: number) => (
                         <div key={idx} className="flex items-center gap-4 bg-slate-950/50 p-3 rounded-2xl border border-white/5">
-                          <img src={item.image_urls?.[0]} className="h-12 w-12 rounded-xl object-cover bg-slate-800" />
+                          <img src={item.image_urls?.[0] ? `${BASE_URL}${item.image_urls[0]}` : ''} className="h-12 w-12 rounded-xl object-cover bg-slate-800" />
                           <div className="flex-1 min-w-0">
                             <p className="font-bold text-slate-200 text-sm truncate">{item.product_name}</p>
                             <p className="text-xs text-slate-500">{item.quantity} x {formatPrice(item.price_snapshot)}</p>
@@ -231,7 +265,9 @@ const CustomerDashboard = () => {
             )}
           </div>
         </div>
-      ) : (
+      )}
+
+      {activeTab === 'wallet' && (
         <div className="grid gap-8 lg:grid-cols-[1fr_400px]">
           {/* Transaction History */}
           <div className="bg-slate-900 rounded-4xl border border-white/5 overflow-hidden">
@@ -251,7 +287,7 @@ const CustomerDashboard = () => {
                       <p className="text-[10px] text-slate-500 uppercase tracking-widest">{new Date(tx.created_at).toLocaleString('vi-VN')}</p>
                     </div>
                     <p className={`font-black ${tx.type === 'deposit' || tx.type === 'refund' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {tx.type === 'deposit' || tx.type === 'refund' ? '+' : '-'}{formatPrice(tx.amount)}
+                      {tx.type === 'deposit' || tx.type === 'refund' ? '+' : '-'}{formatPrice(Math.abs(tx.amount))}
                     </p>
                   </div>
                 ))
@@ -263,7 +299,7 @@ const CustomerDashboard = () => {
           <div className="space-y-6">
             <div className="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-4xl p-8 text-white shadow-xl shadow-indigo-500/20">
               <p className="text-xs font-bold uppercase tracking-widest opacity-70">Số dư hiện tại</p>
-              <h2 className="text-4xl font-black mt-2">{formatPrice(user?.wallet_balance || 0)}</h2>
+              <h2 className="text-4xl font-black mt-2">{formatPrice(profileData?.wallet_balance ?? user?.wallet_balance ?? 0)}</h2>
               <div className="mt-8 flex items-center gap-2 text-xs font-medium bg-white/10 w-fit px-3 py-1.5 rounded-full">
                 <span className="h-2 w-2 bg-emerald-400 rounded-full animate-pulse" />
                 Đang hoạt động
@@ -278,7 +314,11 @@ const CustomerDashboard = () => {
                 {[50000, 100000, 200000, 500000].map(amt => (
                   <button 
                     key={amt} 
-                    onClick={() => setTopupAmount(amt.toString())}
+                    onClick={() => {
+                      if (confirm(`Bạn có muốn nạp nhanh ${formatPrice(amt)} vào ví không?`)) {
+                        topupMutation.mutate(amt);
+                      }
+                    }}
                     className="p-3 rounded-2xl bg-slate-950 border border-white/5 text-xs font-bold text-slate-400 hover:border-indigo-500 hover:text-indigo-400 transition"
                   >
                     {formatPrice(amt)}
@@ -457,7 +497,7 @@ const CustomerDashboard = () => {
             <div className="space-y-4">
               <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Danh sách sản phẩm</h4>
               <div className="space-y-2">
-                {selectedOrder.items?.map((item: any, idx: number) => (
+                {selectedOrder.items?.map((item: IOrderItem, idx: number) => (
                   <div key={idx} className="flex items-center gap-4 bg-slate-950/50 p-3 rounded-2xl border border-white/5">
                     <img src={item.image_urls?.[0]} className="h-10 w-10 rounded-xl object-cover bg-slate-800" />
                     <div className="flex-1 min-w-0">
@@ -469,6 +509,118 @@ const CustomerDashboard = () => {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {activeTab === 'profile' && (
+        <div className="max-w-2xl mx-auto bg-slate-900 border border-white/5 rounded-3xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="p-8 border-b border-white/5">
+            <h3 className="text-xl font-bold text-white">Thông tin cá nhân</h3>
+            <p className="text-slate-500 text-sm mt-1">Cập nhật thông tin liên hệ của bạn để việc giao hàng thuận tiện hơn.</p>
+          </div>
+          
+          {profileLoading ? (
+            <div className="p-20 flex justify-center">
+              <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : (
+            <div className="p-8 space-y-8">
+              {/* Avatar Section */}
+              <div className="flex flex-col items-center gap-4 py-4">
+                <div className="relative group">
+                  <div className="h-32 w-32 rounded-full overflow-hidden border-4 border-slate-800 shadow-2xl relative">
+                    <img 
+                      src={profileData?.avatar_url ? `${BASE_URL}${profileData.avatar_url}` : 'https://ui-avatars.com/api/?name=' + (user?.name || 'User') + '&background=6366f1&color=fff&size=128'} 
+                      alt="Avatar" 
+                      className="h-full w-full object-cover transition duration-300 group-hover:scale-110"
+                    />
+                    {avatarMutation.isPending && (
+                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                        <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      </div>
+                    )}
+                  </div>
+                  <label className="absolute bottom-0 right-0 h-10 w-10 bg-indigo-600 hover:bg-indigo-500 rounded-full border-4 border-slate-900 flex items-center justify-center cursor-pointer shadow-xl transition-all hover:scale-110">
+                    <span className="text-white text-lg">📷</span>
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) avatarMutation.mutate(file);
+                      }}
+                    />
+                  </label>
+                </div>
+                <div className="text-center">
+                  <h4 className="text-white font-bold">{profileData?.name || user?.name}</h4>
+                  <p className="text-slate-500 text-xs">{profileData?.email || user?.email}</p>
+                </div>
+              </div>
+
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const formData = new FormData(e.currentTarget);
+                  profileMutation.mutate({
+                    name: formData.get('name'),
+                    phone: formData.get('phone'),
+                    address: formData.get('address'),
+                  });
+                }}
+                className="space-y-6"
+              >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Họ và tên</label>
+                <input 
+                  name="name"
+                  defaultValue={profileData?.name || user?.name || ''}
+                  className="w-full bg-slate-950 border border-white/5 rounded-2xl px-6 py-4 text-white outline-none focus:border-indigo-500 transition"
+                  placeholder="Nhập họ và tên..."
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Email</label>
+                <input 
+                  disabled
+                  value={profileData?.email || user?.email || ''}
+                  className="w-full bg-slate-950/50 border border-white/5 rounded-2xl px-6 py-4 text-slate-500 outline-none cursor-not-allowed"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Số điện thoại</label>
+                <input 
+                  name="phone"
+                  defaultValue={profileData?.phone || ''}
+                  className="w-full bg-slate-950 border border-white/5 rounded-2xl px-6 py-4 text-white outline-none focus:border-indigo-500 transition"
+                  placeholder="098x xxx xxx"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Địa chỉ</label>
+                <input 
+                  name="address"
+                  defaultValue={profileData?.address || ''}
+                  className="w-full bg-slate-950 border border-white/5 rounded-2xl px-6 py-4 text-white outline-none focus:border-indigo-500 transition"
+                  placeholder="Số nhà, tên đường, phường/xã..."
+                />
+              </div>
+            </div>
+            
+            <div className="pt-4">
+              <button 
+                type="submit"
+                disabled={profileMutation.isPending}
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-2xl transition shadow-lg shadow-indigo-500/20 disabled:opacity-50"
+              >
+                {profileMutation.isPending ? 'Đang lưu...' : 'Lưu thay đổi'}
+              </button>
+            </div>
+          </form>
+          </div>
+          )}
         </div>
       )}
     </div>

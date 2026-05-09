@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { sendResponse } from '../../shared/response';
 import db from '../../core/db';
+import { ICartItem } from '../../shared/types/models';
 
 /**
  * Lấy danh sách sản phẩm trong giỏ hàng
@@ -16,21 +17,26 @@ export const getCart = async (req: Request, res: Response): Promise<void> => {
     const query = `
       SELECT 
         c.id, 
+        c.user_id,
         c.product_id, 
         c.quantity, 
-        p.name, 
-        p.price, 
-        p.stock as current_stock,
-        p.image_urls
+        c.created_at,
+        c.updated_at,
+        p.name as product_name, 
+        p.price as product_price, 
+        p.stock as product_stock,
+        p.image_urls->>0 as product_image,
+        v.store_name
       FROM cart_items c
       JOIN products p ON c.product_id = p.id
+      LEFT JOIN vendors v ON p.vendor_id = v.id
       WHERE c.user_id = $1
       ORDER BY c.created_at DESC
     `;
     const result = await db.query(query, [userId]);
 
     console.log(`[cart]: Fetch Cart Successful - 200 - User ID: ${userId}`);
-    sendResponse(res, 200, true, 'Cart fetched successfully', result.rows);
+    sendResponse<ICartItem[]>(res, 200, true, 'Cart fetched successfully', result.rows as ICartItem[]);
   } catch (err) {
     console.error('Error getCart:', err);
     sendResponse(res, 500, false, 'Internal Server Error');
@@ -85,7 +91,7 @@ export const addToCart = async (req: Request, res: Response): Promise<void> => {
       );
       
       console.log(`[cart]: Update Item Quantity - User ID: ${userId}, Product ID: ${product_id}`);
-      sendResponse(res, 200, true, 'Cart updated successfully');
+      sendResponse<null>(res, 200, true, 'Cart updated successfully', null);
     } else {
       // INSERT mới
       if (quantity > stock) {
@@ -99,7 +105,7 @@ export const addToCart = async (req: Request, res: Response): Promise<void> => {
       );
 
       console.log(`[cart]: Add New Item - User ID: ${userId}, Product ID: ${product_id}`);
-      sendResponse(res, 201, true, 'Product added to cart');
+      sendResponse<null>(res, 201, true, 'Product added to cart', null);
     }
   } catch (err) {
     console.error('Error addToCart:', err);
@@ -148,7 +154,7 @@ export const updateQuantity = async (req: Request, res: Response): Promise<void>
     await db.query('UPDATE cart_items SET quantity = $1, updated_at = NOW() WHERE id = $2', [quantity, id]);
 
     console.log(`[cart]: Update Item Success - ID: ${id}`);
-    sendResponse(res, 200, true, 'Quantity updated');
+    sendResponse<null>(res, 200, true, 'Quantity updated', null);
   } catch (err) {
     console.error('Error updateQuantity:', err);
     sendResponse(res, 500, false, 'Internal Server Error');
@@ -176,7 +182,7 @@ export const removeFromCart = async (req: Request, res: Response): Promise<void>
     }
 
     console.log(`[cart]: Remove Item Success - ID: ${id}`);
-    sendResponse(res, 200, true, 'Item removed from cart');
+    sendResponse<null>(res, 200, true, 'Item removed from cart', null);
   } catch (err) {
     console.error('Error removeFromCart:', err);
     sendResponse(res, 500, false, 'Internal Server Error');
@@ -214,6 +220,8 @@ export const syncCart = async (req: Request, res: Response): Promise<void> => {
       const stock = prodRes.rows[0].stock;
       const syncQuantity = Math.min(quantity, stock);
 
+      if (syncQuantity <= 0) continue; // Skip if no stock or invalid quantity
+
       // 2. Upsert logic
       const existingRes = await client.query(
         'SELECT id, quantity FROM cart_items WHERE user_id = $1 AND product_id = $2',
@@ -238,7 +246,7 @@ export const syncCart = async (req: Request, res: Response): Promise<void> => {
 
     await client.query('COMMIT');
     console.log(`[cart]: Sync Successful - User ID: ${userId}`);
-    sendResponse(res, 200, true, 'Cart synced successfully');
+    sendResponse<null>(res, 200, true, 'Cart synced successfully', null);
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Error syncCart:', err);

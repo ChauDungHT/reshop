@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import axiosInstance from '@shared-ui/lib/axios';
 import { StatCard, DataTable } from '@shared-ui/components';
 import type { Column } from '@shared-ui/components/DataTable';
+import type { IOrder, IApiResponse } from '@shared-ui/types';
 
 interface VendorStats {
   total_revenue: number;
@@ -10,6 +11,7 @@ interface VendorStats {
   active_products: number;
   low_stock_count: number;
   unanswered_qa: number;
+  pending_returns: number;
 }
 
 const VendorDashboard = () => {
@@ -17,7 +19,7 @@ const VendorDashboard = () => {
     queryKey: ['vendor-stats'],
     queryFn: async () => {
         try {
-            const res = await axiosInstance.get('/vendor/dashboard');
+            const res = await axiosInstance.get<IApiResponse<VendorStats>>('/vendor/dashboard');
             return res.data.data;
         } catch (err) {
             console.error('Error fetching dashboard stats:', err);
@@ -27,15 +29,15 @@ const VendorDashboard = () => {
     retry: false
   });
 
-  const { data: orderData, isLoading: ordersLoading, refetch: refetchOrders } = useQuery<{ orders: any[], total: number }>({
+  const { data: orderData, isLoading: ordersLoading, refetch: refetchOrders } = useQuery<{ items: IOrder[], total: number }>({
     queryKey: ['vendor-orders', 'pending'],
     queryFn: async () => {
         try {
-            const res = await axiosInstance.get('/vendor/orders?status=pending&limit=5');
-            return res.data.data; // Extract .data which contains { orders, total }
+            const res = await axiosInstance.get<IApiResponse<{ items: IOrder[], total: number }>>('/vendor/orders?status=pending&limit=5');
+            return res.data.data;
         } catch (err) {
             console.error('Error fetching pending orders:', err);
-            return { orders: [], total: 0 };
+            return { items: [], total: 0 };
         }
     },
     retry: false
@@ -55,23 +57,25 @@ const VendorDashboard = () => {
   };
 
   const mockStats: VendorStats = { 
-    total_revenue: 48500000, 
-    new_orders: 7, 
-    active_products: 142,
-    low_stock_count: 3,
-    unanswered_qa: 5
+    total_revenue: 0, 
+    new_orders: 0, 
+    active_products: 0,
+    low_stock_count: 0,
+    unanswered_qa: 0,
+    pending_returns: 0
   };
-  const mockOrders = [
-    { id: 'VC001', buyer_name: 'Nguyễn Văn A', items: [{product_name: 'Vợt 1'}, {product_name: 'Vợt 2'}], total_amount: 1250000, created_at: new Date().toISOString() },
-    { id: 'VC002', buyer_name: 'Trần Thị B', items: [{product_name: 'Áo 1'}], total_amount: 890000, created_at: new Date().toISOString() },
-  ];
+  const mockOrders: IOrder[] = [];
 
   const s = stats || mockStats;
-  const orders = orderData?.orders || mockOrders;
+  const orders = orderData?.items || mockOrders;
   const totalOrders = orderData?.total || (orders?.length || 0);
 
-  const orderColumns: Column<any>[] = [
-    { key: 'id', header: 'Mã đơn' },
+  const orderColumns: Column<IOrder>[] = [
+    { 
+      key: 'order_code', 
+      header: 'Mã đơn',
+      render: (val) => <span className="font-bold text-slate-300">#{val}</span>
+    },
     { key: 'buyer_name', header: 'Khách hàng' },
     { 
       key: 'items', 
@@ -94,7 +98,7 @@ const VendorDashboard = () => {
       render: (_, row) => (
         <div className="flex gap-2">
           <button 
-            onClick={() => handleUpdateStatus(row.id, 'processing')}
+            onClick={() => handleUpdateStatus(row.id, 'confirmed')}
             className="text-[10px] bg-emerald-600/20 text-emerald-400 px-2 py-1 rounded-lg border border-emerald-500/30 hover:bg-emerald-500/40 transition-colors uppercase font-bold"
           >
             Duyệt
@@ -122,7 +126,7 @@ const VendorDashboard = () => {
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-slate-100 tracking-tight">Tổng Quan Kinh Doanh</h2>
+          <h2 className="text-2xl font-black text-slate-100 tracking-tight uppercase tracking-widest">Dashboard</h2>
           <p className="text-slate-500 text-sm mt-1 font-medium italic">Chào mừng trở lại! Dưới đây là tình hình gian hàng của bạn.</p>
         </div>
         <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-slate-900/50 px-3 py-1.5 rounded-full border border-slate-800">
@@ -132,40 +136,49 @@ const VendorDashboard = () => {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard
           label="Doanh thu"
-          value={`${((s.total_revenue || 0) / 1000000).toFixed(1)}M`}
-          sub="Tổng doanh thu"
-          icon="💹"
+          value={new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumSignificantDigits: 3 }).format(s.total_revenue || 0)}
+          sub="Tổng doanh thu tích lũy"
+          icon="💰"
           accent="text-emerald-400"
         />
         <StatCard 
           label="Đơn mới" 
           value={s.new_orders || 0} 
-          sub="Chờ xác nhận" 
-          icon="📦" 
+          sub="Cần xác nhận ngay" 
+          icon="⚡" 
           accent="text-amber-400" 
         />
         <StatCard 
           label="Tồn kho thấp" 
           value={s.low_stock_count || 0} 
-          sub="Cần bổ sung" 
+          sub="Sản phẩm cần nhập thêm" 
           trend={(s.low_stock_count || 0) > 0 ? 'down' : undefined}
-          icon="⚠️" 
+          icon="📉" 
           accent="text-rose-400" 
         />
+      </div>
+
+      {/* Secondary Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard 
           label="Hỏi đáp mới" 
           value={s.unanswered_qa || 0} 
-          sub="Chờ phản hồi" 
           icon="💬" 
           accent="text-sky-400" 
         />
         <StatCard 
-          label="Sản phẩm" 
+          label="Yêu cầu trả hàng" 
+          value={s.pending_returns || 0} 
+          icon="🔄" 
+          accent="text-orange-400" 
+        />
+        <StatCard 
+          label="Sản phẩm đang bán" 
           value={s.active_products || 0} 
-          icon="🗂" 
+          icon="📦" 
           accent="text-indigo-400" 
         />
       </div>

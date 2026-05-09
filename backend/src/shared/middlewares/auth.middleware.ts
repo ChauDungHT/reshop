@@ -34,8 +34,9 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction):
     req.user = decoded;
     console.log(`[auth]: Verify Token Successful - 200 - User ID: ${decoded.id}`);
     next();
-  } catch (error: any) {
-    console.log(`[Error - auth]: ${req.method} ${req.originalUrl || req.path} - 401 - ${error.message}`);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown auth error';
+    console.log(`[Error - auth]: ${req.method} ${req.originalUrl || req.path} - 401 - ${message}`);
     sendResponse(res, 401, false, 'Invalid token');
   }
 };

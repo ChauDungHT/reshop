@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { sendResponse } from '../../shared/response';
 import db from '../../core/db';
+import { IUser, IVendor } from '../../shared/types/models';
 
 export const registerCustomer = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -20,14 +21,14 @@ export const registerCustomer = async (req: Request, res: Response): Promise<voi
     const query = `
       INSERT INTO users (name, email, password_hash, role, status)
       VALUES ($1, $2, $3, $4, $5)
-      RETURNING id, email, role, status
+      RETURNING id, name, email, role, status, wallet_balance, phone, address, avatar_url, last_login_at, created_at
     `;
     const values = [name, email, passwordHash, 'customer', 'active'];
 
     const result = await db.query(query, values);
 
     console.log(`[auth]: Register Customer Successful - 201`);
-    sendResponse(res, 201, true, 'Registered customer successfully', result.rows[0]);
+    sendResponse<IUser>(res, 201, true, 'Registered customer successfully', result.rows[0] as IUser);
   } catch (err: any) {
     if (err.code === '23505') {
       console.log(`[auth]: Register Customer Failed - 409`);
@@ -70,16 +71,16 @@ export const registerVendor = async (req: Request, res: Response): Promise<void>
     const vendorQuery = `
       INSERT INTO vendors (user_id, store_name, slug, status, bank_info)
       VALUES ($1, $2, $3, $4, $5)
-      RETURNING id, store_name, status
+      RETURNING id, user_id, store_name, slug, status, commission_rate, bank_info, logo_url, banner_url, phone, address, email, return_policy_days, return_policy_desc, created_at, updated_at
     `;
     const vendorResult = await client.query(vendorQuery, [userId, store_name, slug, 'inactive', bank_info || {}]);
 
     await client.query('COMMIT');
 
     console.log(`[auth]: Register Vendor Successful - 201`);
-    sendResponse(res, 201, true, 'Vendor registration submitted, awaiting approval', {
+    sendResponse<{ user_id: string; vendor: IVendor }>(res, 201, true, 'Vendor registration submitted, awaiting approval', {
       user_id: userId,
-      vendor: vendorResult.rows[0]
+      vendor: vendorResult.rows[0] as IVendor
     });
   } catch (err: any) {
     await client.query('ROLLBACK');
@@ -146,7 +147,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     const token = jwt.sign(payload, secret, { expiresIn: '7d' });
 
     console.log(`[auth]: Login Successful - 200`);
-    sendResponse(res, 200, true, 'Login successful', { 
+    sendResponse<{ token: string; user: IUser }>(res, 200, true, 'Login successful', { 
       token, 
       user: { 
         id: user.id, 
@@ -156,8 +157,11 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         status: user.status,
         wallet_balance: user.wallet_balance,
         phone: user.phone,
-        address: user.address
-      } 
+        address: user.address,
+        avatar_url: user.avatar_url,
+        last_login_at: user.last_login_at,
+        created_at: user.created_at
+      } as IUser 
     });
   } catch (err) {
     console.error('Error login:', err);

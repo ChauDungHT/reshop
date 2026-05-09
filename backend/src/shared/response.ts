@@ -1,15 +1,17 @@
 import { Response } from 'express';
+import { IApiResponse } from './types/api';
 
-export const sendResponse = (
-  res: Response,
+export const sendResponse = <T = any>(
+  res: Response<IApiResponse<T>>,
   statusCode: number,
   success: boolean,
   message: string,
-  data: any = null
+  data: T | null = null
 ) => {
-  return res.status(statusCode).json({
+  const responseData: IApiResponse<T> = {
     success,
     message,
-    data,
-  });
+    data: data as T,
+  };
+  return res.status(statusCode).json(responseData);
 };

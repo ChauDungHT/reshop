@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
@@ -75,7 +75,7 @@ const StorefrontLayout = () => {
                     to="/dashboard"
                     className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
                   >
-                    Quản lý
+                    Quản lý Tài khoản
                   </NavLink>
                   <button
                     onClick={handleLogout}

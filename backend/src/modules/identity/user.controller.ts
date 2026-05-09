@@ -2,11 +2,12 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import db from '../../core/db';
 import { sendResponse } from '../../shared/response';
+import { IUser } from '../../shared/types/models';
 
 export const getProfile = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user?.id;
-    const query = 'SELECT id, name, email, role, phone, address, avatar_url, wallet_balance FROM users WHERE id = $1';
+    const query = 'SELECT id, name, email, role, phone, address, avatar_url, wallet_balance, status, last_login_at, created_at FROM users WHERE id = $1';
     const result = await db.query(query, [userId]);
 
     if (result.rows.length === 0) {
@@ -16,7 +17,7 @@ export const getProfile = async (req: Request, res: Response): Promise<void> => 
     }
 
     console.log(`[identity]: Fetch Profile Successful - 200 - User ID: ${userId}`);
-    sendResponse(res, 200, true, 'User profile fetched successfully', result.rows[0]);
+    sendResponse<IUser>(res, 200, true, 'User profile fetched successfully', result.rows[0] as IUser);
   } catch (error: any) {
     console.log(`[Error - identity]: GET /api/users/profile - 500 - ${error.message}`);
     sendResponse(res, 500, false, 'Internal Server Error');
@@ -34,12 +35,12 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
           address = COALESCE($2, address),
           name = COALESCE($3, name)
       WHERE id = $4
-      RETURNING id, name, email, phone, address, avatar_url, wallet_balance
+      RETURNING id, name, email, role, status, wallet_balance, phone, address, avatar_url, last_login_at, created_at
     `;
     const result = await db.query(query, [phone, address, name, userId]);
 
     console.log(`[identity]: Update Profile Successful - 200 - User ID: ${userId}`);
-    sendResponse(res, 200, true, 'Profile updated successfully', result.rows[0]);
+    sendResponse<IUser>(res, 200, true, 'Profile updated successfully', result.rows[0] as IUser);
   } catch (error: any) {
     if (error.code === '42703') { // Undefined column in postgres
       console.log(`[Error - identity]: PUT /api/users/profile - 500 - Missing schema column (phone/address)`);
@@ -83,7 +84,7 @@ export const updatePassword = async (req: Request, res: Response): Promise<void>
     await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [newPasswordHash, userId]);
 
     console.log(`[identity]: Update Password Successful - 200 - User ID: ${userId}`);
-    sendResponse(res, 200, true, 'Password updated successfully');
+    sendResponse<null>(res, 200, true, 'Password updated successfully', null);
   } catch (error: any) {
     console.log(`[Error - identity]: PUT /api/users/password - 500 - ${error.message}`);
     sendResponse(res, 500, false, 'Internal Server Error');
@@ -104,7 +105,7 @@ export const uploadAvatar = async (req: Request, res: Response): Promise<void> =
     await db.query('UPDATE users SET avatar_url = $1 WHERE id = $2', [avatarUrl, userId]);
 
     console.log(`[identity]: Upload Avatar Successful - 200 - URL: ${avatarUrl}`);
-    sendResponse(res, 200, true, 'Avatar uploaded successfully', { avatar_url: avatarUrl });
+    sendResponse<{ avatar_url: string }>(res, 200, true, 'Avatar uploaded successfully', { avatar_url: avatarUrl });
   } catch (error: any) {
     console.log(`[Error - identity]: POST /api/users/avatar - 500 - ${error.message}`);
     sendResponse(res, 500, false, 'Internal Server Error');

@@ -205,7 +205,7 @@ const CheckoutPage = () => {
                 <button onClick={() => setStep(2)} className="flex-1 rounded-3xl border border-slate-700 py-4 font-bold text-slate-300 hover:bg-slate-800 transition">Quay lại</button>
                 <button 
                   onClick={handlePlaceOrder} 
-                  disabled={isSubmitting || (paymentMethod === 'wallet' && user && user.wallet_balance < total)}
+                  disabled={isSubmitting || !!(paymentMethod === 'wallet' && user && user.wallet_balance < total)}
                   className="flex-2 rounded-3xl bg-emerald-600 py-4 font-bold text-white hover:bg-emerald-500 transition disabled:opacity-50 shadow-lg shadow-emerald-500/20"
                 >
                   {isSubmitting ? 'Đang xử lý...' : `Đặt hàng: ${formatPrice(total)}`}
