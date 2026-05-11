@@ -164,3 +164,30 @@ export const getProductById = async (req: Request, res: Response): Promise<void>
   }
 };
 
+
+export const createQuestion = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id: product_id } = req.params;
+    const { question } = req.body;
+    const user_id = (req as any).user.id;
+
+    if (!question || question.trim().length === 0) {
+      sendResponse(res, 400, false, 'Question content is required');
+      return;
+    }
+
+    const insertQuery = `
+      INSERT INTO qa (product_id, user_id, question)
+      VALUES ($1, $2, $3)
+      RETURNING *
+    `;
+    const result = await db.query(insertQuery, [product_id, user_id, question]);
+
+    console.log(`[catalog]: Create QA Successful - 201 - Product: ${product_id}, User: ${user_id}`);
+    sendResponse(res, 201, true, 'Question submitted successfully', result.rows[0]);
+  } catch (err) {
+    console.error('Error createQuestion:', err);
+    console.log(`[Error - catalog]: POST /api/products/${req.params.id}/qa - 500 - Internal Server Error`);
+    sendResponse(res, 500, false, 'Internal Server Error');
+  }
+};

@@ -1,23 +1,30 @@
-# SKILL: DATABASE SYNCHRONIZATION
-**Purpose:** This file acts as the "Source of Truth" for shop data, categories, and inventory. 
-**Instructions for Agent:** 
-1. When a user asks to "sync database" or "update inventory", read this file.
-2. Run `npm run db:sync` in the backend directory to apply these changes.
-3. Verify that the database reflects the data in the tables below.
+# SKILL: CREATE_NEW_SHOP
+**Mục tiêu:** Tự động hóa quy trình tạo một cửa hàng (Vendor) mới trên hệ thống Reshop bằng cách trích xuất dữ liệu từ file này và thực thi các câu lệnh Database cần thiết.
+
+**Hướng dẫn dành cho Agent:**
+1. **Đọc dữ liệu:** Phân tích thông tin từ các mục: Chủ shop (User), Thông tin cửa hàng (Vendor), Danh mục (Categories) và Sản phẩm (Products).
+2. **Kiểm tra User:** Tìm kiếm User theo email `${email}`. Nếu chưa có, tạo User mới với role `vendor` và password mặc định (ví dụ: `123456`).
+3. **Tạo Vendor:** Tạo bản ghi trong bảng `vendors` liên kết với User vừa tạo. Đảm bảo `slug` là duy nhất.
+4. **Xử lý Danh mục:** Kiểm tra sự tồn tại của các danh mục theo `slug`. Nếu danh mục cha (Parent ID) chưa có, hãy tạo nó trước. Lưu lại ID của các danh mục để gán cho sản phẩm.
+5. **Chèn Sản phẩm:** Thêm tất cả 10 sản phẩm vào bảng `products`. Phải gán đúng `vendor_id` của shop vừa tạo và `category_id` tương ứng.
+6. **Xác nhận:** Báo cáo kết quả chi tiết bao gồm ID của Vendor và số lượng sản phẩm đã chèn.
+
 
 ---
 
 ## 1. Dữ liệu Tài khoản Chủ shop (`users` table)
-* **name**: Nguyễn Văn B
-* **email**: contact2@caulongstore.com
+* **name**: Nguyễn Văn A
+* **email**: contact@caulongstore.com
 * **phone**: 0987654321
 * **address**: 123 Lê Lợi, TP. Vinh, Nghệ An
 
+
 ## 2. Dữ liệu Thông tin Cửa hàng (`vendors` table)
-* **store_name**: Cầu Lông Pro
-* **slug**: cau-long-pro
+* **store_name**: Thế Giới Cầu Lông (Updated)
+* **slug**: the-gioi-cau-long
 * **commission_rate**: 5.0
-* **bank_info**: `{"bank": "Vietcombank", "account_no": "1012345678", "owner": "NGUYEN VAN B"}`
+* **bank_info**: `{"bank": "Vietcombank", "account_no": "1012345678", "owner": "NGUYEN VAN A"}`
+
 
 Dưới đây là danh sách **10 mặt hàng cầu lông** được chuẩn hóa theo cấu trúc dữ liệu bạn yêu cầu, bao gồm đầy đủ thông tin về danh mục, thông số kỹ thuật và tồn kho.
 
@@ -33,6 +40,11 @@ Dưới đây là danh sách **10 mặt hàng cầu lông** được chuẩn hó
 | 5 | Vợt Lining | `vot-lining` | 1 |
 | 6 | Vợt Victor | `vot-victor` | 1 |
 | 7 | Cước & Phụ kiện | `cuoc-phu-kien` | 3 |
+| 8 | Vợt Mizuno | `vot-mizuno` | 1 |
+| 9 | Vợt Kumpoo | `vot-kumpoo` | 1 |
+| 10 | Balo - Túi | `balo-tui` | NULL |
+| 11 | Quần áo | `quan-ao` | NULL |
+
 
 ---
 
@@ -41,16 +53,20 @@ Dưới đây là danh sách **10 mặt hàng cầu lông** được chuẩn hó
 Dưới đây là 10 sản phẩm (tập trung vào vợt) để bạn đưa vào database. 
 *Lưu ý: Tất cả sản phẩm sẽ sử dụng `vendor_id` của shop vừa tạo và có `status` mặc định là `active`.*
 
-| STT | Tên sản phẩm (Name) | Mô tả (Description - Thông số kỹ thuật) | Giá (Price) | Tồn kho (Stock) | Danh mục |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| 1 | **Yonex Astrox 88D Pro (Gen 3)** | Trọng lượng: 4U, Cán: G5. Điểm cân bằng: Nặng đầu. Sức căng: 28lbs. Công nghệ: Rotational Generator System. | 4,250,000 | 50 | Vợt Yonex |
-| 2 | **Yonex Nanoflare 1000Z** | Trọng lượng: 4U, Cán: G5. Dòng vợt siêu tốc độ, thân cứng, đầu cân bằng. Phù hợp đánh đôi, phản tạt. | 4,100,000 | 15 | Vợt Yonex |
-| 3 | **Lining Axforce 80** | Trọng lượng: 3U/4U. Thân vợt linh hoạt, thiên công mạnh mẽ. Sức căng tối đa: 30lbs. | 3,850,000 | 12 | Vợt Lining |
-| 4 | **Lining Halbertec 8000** | Trọng lượng: 4U, Cán: G5. Dòng vợt kiểm soát cầu toàn diện, cân bằng giữa công và thủ. | 3,700,000 | 20 | Vợt Lining |
-| 5 | **Victor Thruster Ryuga II** | Trọng lượng: 3U/4U. Vợt thiên công, thân cứng vừa phải, sức căng cực cao lên đến 31lbs. | 3,600,000 | 10 | Vợt Victor |
-| 6 | **Victor Brave Sword 12 SE** | Trọng lượng: 3U/4U. Khung vợt kim cương xé gió, huyền thoại của Victor cho lối đánh tốc độ. | 3,100,000 | 30 | Vợt Victor |
-| 7 | **Yonex Arcsaber 11 Pro** | Trọng lượng: 4U, Cán: G5. Vợt công thủ toàn diện, điều cầu cực kỳ chính xác. | 4,050,000 | 18 | Vợt Yonex |
-| 8 | **Giày Yonex 65Z3 Wide** | Giày chuyên dụng cầu lông cao cấp. Đệm Power Cushion+. Màu: Trắng/Xanh. Size: 39-44. | 2,800,000 | 45 | Giày |
-| 9 | **Cước Yonex BG66 Ultimax** | Đường kính: 0.65mm. Cước cho độ nảy cao, tiếng nổ đanh. Màu: Trắng, Vàng, Cam. | 180,000 | 200 | Phụ kiện |
-| 10 | **Quấn cán Yonex AC102EX** | Chất liệu cao su non bám tay, thấm hút mồ hôi tốt. Vỉ 3 cái. | 120,000 | 500 | Phụ kiện |
+| STT | Tên sản phẩm (Name) | Mô tả (Description - Thông số kỹ thuật) | Giá (Price) | Tồn kho (Stock) | Danh mục | Ảnh (Images) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| 4 | **Mizuno Fortius 10 Quick** | Trọng lượng: 4U. Vợt thiên về phản tạt, tốc độ vung vợt cực nhanh. Thiết kế tối ưu cho dòng đánh đôi. | 3,950,000 | 12 | Vợt Mizuno | `/uploads/products/mizuno-fortius-10-quick.png` |
+| 5 | **Kumpoo Power Control K520 Pro** | Trọng lượng: 4U, Cán: G5. Thân vợt dẻo, trợ lực cực tốt, điểm ngọt lớn phù hợp cho người mới bắt đầu. | 650,000 | 80 | Vợt Kumpoo | `/uploads/products/kumpoo-power-control-k520-pro.png` |
+| 6 | **Giày Lining AYTS012** | Giày form rộng, đế cao su chống mài mòn cao. Tích hợp công nghệ đệm giảm chấn Cloud êm ái. Màu: Đen/Đỏ. | 1,450,000 | 35 | Giày cầu lông | `/uploads/products/giay-lining-ayts012.png` |
+| 7 | **Giày Victor P9200II** | Dòng giày siêu êm ái của Victor. Trang bị hệ thống đệm Energymax 3.0 và công nghệ chống lật cổ chân an toàn. | 2,500,000 | 25 | Giày cầu lông | `/uploads/products/giay-victor-p9200ii.png` |
+| 8 | **Balo Yonex BA82012EX** | Balo thể thao đa năng, có ngăn chứa giày và vợt riêng biệt. Kích thước: 33x25.5x50 cm, chất liệu chống nước nhẹ. | 1,150,000 | 40 | Balo - Túi | `/uploads/products/balo-yonex-ba82012ex.png` |
+| 9 | **Túi cầu lông Lining ABJS037** | Túi chữ nhật 2 ngăn lớn, trang bị lớp cách nhiệt bảo vệ khung vợt. Sức chứa tối đa lên đến 6 cây vợt. | 1,200,000 | 15 | Balo - Túi | `/uploads/products/tui-cau-long-lining-abjs037.png` |
+| 10 | **Ống cầu lông Vina Star** | Quả cầu lông tiêu chuẩn thi đấu, tốc độ 76. Độ bền lông cao, quỹ đạo bay ổn định. (Đóng gói: Ống 12 quả). | 220,000 | 300 | Phụ kiện | `/uploads/products/ong-cau-long-vina-star.png` |
+| 11 | **Cước Lining No.1** | Đường kính: 0.65mm. Dòng cước trợ lực, độ nảy cực tốt và âm thanh đanh rát, đối thủ cạnh tranh của BG66U. | 150,000 | 150 | Phụ kiện | `/uploads/products/cuoc-lining-no-1.png` |
+| 12 | **Quấn cán vải Victor GR334** | Quấn cán bằng chất liệu vải nhung, siêu thấm hút hôi. Lựa chọn tối ưu cho người chơi ra nhiều mồ hôi tay. | 45,000 | 400 | Phụ kiện | `/uploads/products/quan-can-vai-victor-gr334.png` |
+| 13 | **Áo cầu lông Yonex 10458EX** | Chất liệu vải Polyester thoáng khí, ứng dụng công nghệ VeryCool làm mát nhanh chóng. Form dáng thể thao. | 650,000 | 60 | Quần áo | `/uploads/products/ao-cau-long-yonex-10458ex.png` |
+
+
+
+
 ---

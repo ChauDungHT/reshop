@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { getProducts, getProductById } from './product.controller';
+import { getProducts, getProductById, createQuestion } from './product.controller';
+import { authMiddleware } from '../../shared/middlewares/auth.middleware';
 
 const router = Router();
 
@@ -7,4 +8,8 @@ const router = Router();
 router.get('/', getProducts);
 router.get('/:id', getProductById);
 
+// Protected routes
+router.post('/:id/qa', authMiddleware, createQuestion);
+
 export default router;
+

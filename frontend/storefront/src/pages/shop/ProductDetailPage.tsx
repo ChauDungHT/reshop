@@ -4,36 +4,22 @@ import { useQuery } from '@tanstack/react-query';
 import axiosInstance, { BASE_URL } from '../../../../shared-ui/src/lib/axios';
 import { useAuth } from '../../../../shared-ui/src/context/AuthContext';
 import { useCart } from '../../../../shared-ui/src/context/CartContext';
+import { useQueryClient } from '@tanstack/react-query';
+import type { IProduct, IReview, IQAItem } from '@shared-ui/types/models';
 
-interface Product {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  stock: number;
-  image_urls: string[] | null;
-  average_rating: number;
-  category_id: string;
-  vendor_id: string;
+
+
+interface ProductDetail extends IProduct {
   store_name: string;
+  vendor_slug: string;
 }
 
-interface Review {
-  id: string;
+interface ReviewWithUser extends IReview {
   user_name: string;
-  stars: number;
-  comment: string;
-  created_at: string;
   avatar_url?: string;
 }
 
-interface QA {
-  id: string;
-  user_name: string;
-  question: string;
-  answer: string | null;
-  created_at: string;
-}
+
 
 const PLACEHOLDER_IMG = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='500' height='500' viewBox='0 0 500 500'%3E%3Crect width='500' height='500' fill='%231e293b'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='40' fill='%2364748b'%3ENo Image%3C/text%3E%3C/svg%3E`;
 const formatPrice = (value: number) => `${Number(value).toLocaleString('vi-VN')}₫`;
@@ -46,6 +32,11 @@ const ProductDetailPage = () => {
   const [ratingFilter, setRatingFilter] = useState(0);
 
   const [isAdding, setIsAdding] = useState(false);
+  const [isAsking, setIsAsking] = useState(false);
+  const [questionContent, setQuestionContent] = useState('');
+  const [isSubmittingQA, setIsSubmittingQA] = useState(false);
+  const queryClient = useQueryClient();
+
 
   const handleAddToCart = async () => {
     if (!data?.product) return;
@@ -56,17 +47,33 @@ const ProductDetailPage = () => {
     alert('Đã thêm sản phẩm vào giỏ hàng!');
   };
 
+  const handleSubmitQuestion = async () => {
+    if (!questionContent.trim()) return;
+    
+    setIsSubmittingQA(true);
+    try {
+      await axiosInstance.post(`/products/${id}/qa`, { question: questionContent });
+      setQuestionContent('');
+      setIsAsking(false);
+      queryClient.invalidateQueries({ queryKey: ['product', id] });
+      alert('Câu hỏi của bạn đã được gửi thành công!');
+    } catch (error) {
+      console.error('Error submitting question:', error);
+      alert('Đã có lỗi xảy ra khi gửi câu hỏi. Vui lòng thử lại sau.');
+    } finally {
+      setIsSubmittingQA(false);
+    }
+  };
+
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['product', id],
     queryFn: async () => {
-      const response = await axiosInstance.get(`/products/${id}`);
-      return response.data.data as { 
-        product: Product; 
-        relatedProducts: Product[];
-        reviews: Review[];
-        qa: QA[];
-      };
+      const response = await axiosInstance.get<{ data: { product: ProductDetail; relatedProducts: IProduct[]; reviews: ReviewWithUser[]; qa: IQAItem[] } }>(`/products/${id}`);
+      return response.data.data;
     },
+
+    enabled: !!id,
   });
 
   if (isLoading) return (
@@ -232,12 +239,46 @@ const ProductDetailPage = () => {
           <section className="space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-black text-white">Hỏi đáp về sản phẩm</h2>
-              {user && (
-                <button className="rounded-full bg-slate-800 px-6 py-2 text-sm font-bold text-indigo-400 transition hover:bg-slate-700">
+              {user && !isAsking && (
+                <button 
+                  onClick={() => setIsAsking(true)}
+                  className="rounded-full bg-slate-800 px-6 py-2 text-sm font-bold text-indigo-400 transition hover:bg-slate-700"
+                >
                   Đặt câu hỏi
                 </button>
               )}
             </div>
+
+            {isAsking && (
+              <div className="rounded-3xl bg-slate-800/50 p-6 border border-slate-700 space-y-4">
+                <textarea
+                  value={questionContent}
+                  onChange={(e) => setQuestionContent(e.target.value)}
+                  placeholder="Nhập câu hỏi của bạn tại đây..."
+                  className="w-full bg-slate-900 border border-slate-700 rounded-2xl p-4 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[120px]"
+                />
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => {
+                      setIsAsking(false);
+                      setQuestionContent('');
+                    }}
+                    className="px-6 py-2 text-sm font-bold text-slate-400 hover:text-white transition"
+                    disabled={isSubmittingQA}
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    onClick={handleSubmitQuestion}
+                    disabled={isSubmittingQA || !questionContent.trim()}
+                    className="rounded-full bg-indigo-600 px-6 py-2 text-sm font-bold text-white transition hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSubmittingQA ? 'Đang gửi...' : 'Gửi câu hỏi'}
+                  </button>
+                </div>
+              </div>
+            )}
+
 
             {!user && (
               <div className="rounded-3xl bg-indigo-500/5 p-4 text-center border border-indigo-500/10 text-sm text-indigo-300">
