@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { sendResponse } from '../response';
+import { config } from '../../core/config';
 
 export interface AuthPayload {
   id: string;
@@ -27,10 +28,9 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction):
   }
 
   const token = authHeader.split(' ')[1];
-  const secret = process.env.JWT_SECRET || 'super-secret-key-fallback';
 
   try {
-    const decoded = jwt.verify(token, secret) as AuthPayload;
+    const decoded = jwt.verify(token, config.jwtSecret) as AuthPayload;
     req.user = decoded;
     console.log(`[auth]: Verify Token Successful - 200 - User ID: ${decoded.id}`);
     next();

@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { sendResponse } from '../../shared/response';
 import db from '../../core/db';
 import { IUser, IVendor } from '../../shared/types/models';
+import { config } from '../../core/config';
 
 export const registerCustomer = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -143,8 +144,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       vendor_id: vendorId
     };
 
-    const secret = process.env.JWT_SECRET || 'super-secret-key-fallback';
-    const token = jwt.sign(payload, secret, { expiresIn: '7d' });
+    const token = jwt.sign(payload, config.jwtSecret, { expiresIn: '7d' });
 
     console.log(`[auth]: Login Successful - 200`);
     sendResponse<{ token: string; user: IUser }>(res, 200, true, 'Login successful', { 

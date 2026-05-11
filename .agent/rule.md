@@ -4,7 +4,6 @@
 > **MỤC ĐÍCH FILE NÀY**: Đóng vai trò là Kim Chỉ Nam (System Guidelines) cho các AI Assistant hoặc các Developer tham gia vào dự án. Bất kỳ prompt sinh code hoặc file tài liệu nào từ nay về sau **BẮT BUỘC** phải tuân thủ nghiêm ngặt các quy ước thống nhất được tổng hợp từ 3 tài liệu cơ sở: `function.md`, `db.md`, `structure.md`.
 
 ---
-
 ## 1. TECH STACK
 Bất cứ giải pháp sinh code nào cũng phải ưu tiên sử dụng tập công nghệ lõi này trừ khi có yêu cầu khác:
 - **Backend**: Node.js (kiến trúc Modular Monolith), PostgreSQL cho Database.

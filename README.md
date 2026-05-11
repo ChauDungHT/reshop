@@ -35,12 +35,14 @@ cd backend
 cp .env.example .env
 ```
 
-Giá trị mặc định của `DATABASE_URL` trong `.env` nên được đặt theo credentials của docker như sau:
+Mở file `.env` vừa tạo và điền các giá trị tương ứng với cấu hình Docker của bạn:
 
 ```env
-DATABASE_URL=postgres://postgres:password@localhost:5433/cdshop
-JWT_SECRET=super-secret-key-fallback
+DATABASE_URL=postgres://<POSTGRES_USER>:<POSTGRES_PASSWORD>@localhost:5433/<POSTGRES_DB>
+JWT_SECRET=<chuỗi-bí-mật-đủ-dài-và-ngẫu-nhiên>
 ```
+
+> **Lưu ý**: Thay `<POSTGRES_USER>`, `<POSTGRES_PASSWORD>`, `<POSTGRES_DB>` bằng đúng giá trị bạn đã khai báo trong file `.env` ở thư mục gốc (dùng cho Docker).
 
 ### Bước 3: Cài đặt Dependencies Backend
 
@@ -81,14 +83,10 @@ Nằm trong `backend/package.json`:
 - `npm run lint`: Chạy ESLint để rà soát lỗi format TypeScript.
 - `npm run test:tsc`: Phân tích tĩnh bắt lỗi logic Type-Checking của toàn hệ thống (không Build).
 
-Email: admin@reshop.vn
-Mật khẩu: admin123@<>
+---
 
-Email Vendor (Nhà bán hàng): contact@caulongstore.com
-Mật khẩu: password123
+## 🔑 Tài Khoản Demo (Seed Data)
 
-Email Customer (Khách hàng): phuongthuy@reshop.vn
-Mật khẩu: 12345678
+Sau khi chạy `npm run db:migrate` và `npm run seed:admin`, hệ thống sẽ có tài khoản Admin đầu tiên với email và mật khẩu bạn truyền vào lệnh seed.
 
-Email Vendor (Nhà bán hàng 2): contact2@caulongstore.com
-Mật khẩu: password123
+Thông tin đăng nhập của các tài khoản demo **không được lưu trong repo** để tránh rủi ro bảo mật. Vui lòng liên hệ trực tiếp với người quản lý dự án để lấy credentials khi cần.
