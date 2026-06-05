@@ -2,10 +2,13 @@ const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcrypt');
 const { Pool } = require('pg');
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '../../../.env') });
+
+const connectionString = process.env.DATABASE_URL || 
+  `postgres://${process.env.POSTGRES_USER || 'postgres'}:${process.env.POSTGRES_PASSWORD || 'password'}@localhost:5433/${process.env.POSTGRES_DB || 'cdshop'}`;
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString,
 });
 
 async function parseMarkdownTable(content, sectionTitle) {

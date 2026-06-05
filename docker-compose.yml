@@ -25,9 +25,11 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: reshop_backend
+    env_file:
+      - .env
     environment:
       - DATABASE_URL=postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-cdshop}
-      - JWT_SECRET=your-super-secret-key-here
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-key-here}
       - PORT=8000
     ports:
       - "8000:8000"

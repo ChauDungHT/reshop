@@ -1,5 +1,7 @@
 import dotenv from 'dotenv';
-dotenv.config();
+import path from 'path';
+
+dotenv.config({ path: path.join(__dirname, '../../../.env') });
 
 /**
  * Đọc biến môi trường bắt buộc.
@@ -15,6 +17,7 @@ function requireEnv(key: string): string {
 
 export const config = {
   jwtSecret: requireEnv('JWT_SECRET'),
-  databaseUrl: requireEnv('DATABASE_URL'),
+  databaseUrl: process.env.DATABASE_URL || 
+    `postgres://${process.env.POSTGRES_USER || 'postgres'}:${process.env.POSTGRES_PASSWORD || 'password'}@localhost:5433/${process.env.POSTGRES_DB || 'cdshop'}`,
   port: process.env.PORT ? parseInt(process.env.PORT, 10) : 8000,
 };
