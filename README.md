@@ -2,91 +2,109 @@
 
 Dự án Hệ thống Sàn thương mại điện tử Đa nhà cung cấp (Multi-Vendor E-commerce Platform). Hệ thống được chia theo kiến trúc Modular Monolith dành cho Backend và 3 portal độc lập dành cho Frontend (Customer, Vendor, Admin).
 
-## Yêu cầu Hệ thống (Prerequisites)
-
-Để chạy được dự án ở môi trường Local, máy tính của bạn cần được cài đặt sẵn:
-
-- **Node.js**: v18.x hoặc cao hơn.
-- **Docker & Docker Compose**: Để chạy PostgreSQL cục bộ mà không cần phải config thủ công.
-- **Git**: Quản lý phiên bản.
+Toàn bộ dự án được quản lý và khởi chạy thông qua **Docker & Docker Compose** để tối ưu hóa quy trình cài đặt và đồng bộ hóa môi trường giữa các thành viên.
 
 ---
 
-## 🚀 Hướng Dẫn Cài Đặt và Khởi Chạy Nhanh (Local Setup)
+## 🛠️ Yêu cầu Hệ thống (Prerequisites)
+
+Để chạy được dự án, máy tính của bạn cần được cài đặt sẵn:
+- **Docker & Docker Compose**
+- **Git** (để quản lý phiên bản)
+
+---
+
+## 🚀 Hướng Dẫn Cài Đặt và Khởi Chạy Nhanh (Docker-based Setup)
 
 Vui lòng làm tuần tự theo các bước dưới đây để thiết lập được hệ thống.
 
-### Bước 1: Khởi động Database (PostgreSQL)
+### Bước 1: Thiết lập Biến Môi Trường (Environment Variables)
 
-Dự án đã đính kèm sẵn cấu hình `docker-compose.yml`. Bạn chỉ cần khởi chạy container DB ở thư mục gốc của dự án:
-
-```bash
-docker-compose up -d
-```
-
-_Lưu ý: PostgreSQL sẽ chạy trên cổng `5433` để tránh xung độ với các PostgreSQL service nội bộ có thể đã được cài đặt._
-
-### Bước 2: Thiết lập Biến Môi Trường (Environment Variables)
-
-Chuyển hướng vào thư mục backend và copy file mẫu `.env.example` thành `.env`:
+Sao chép file mẫu `.env.example` ở thư mục gốc thành `.env`:
 
 ```bash
-cd backend
 cp .env.example .env
 ```
 
-Mở file `.env` vừa tạo và điền các giá trị tương ứng với cấu hình Docker của bạn:
+Mở file `.env` vừa tạo và cập nhật các thông tin cấu hình (như mật khẩu PostgreSQL hoặc API Key của Gemini nếu có).
 
-```env
-DATABASE_URL=postgres://<POSTGRES_USER>:<POSTGRES_PASSWORD>@localhost:5433/<POSTGRES_DB>
-JWT_SECRET=<chuỗi-bí-mật-đủ-dài-và-ngẫu-nhiên>
-```
+### Bước 2: Khởi chạy các dịch vụ (Containers)
 
-> **Lưu ý**: Thay `<POSTGRES_USER>`, `<POSTGRES_PASSWORD>`, `<POSTGRES_DB>` bằng đúng giá trị bạn đã khai báo trong file `.env` ở thư mục gốc (dùng cho Docker).
-
-### Bước 3: Cài đặt Dependencies Backend
-
-Chắc chắn bạn đang ở thư mục `backend/` và gõ lệnh cài gói NPM:
+Chạy lệnh dưới đây tại thư mục gốc của dự án để build và chạy toàn bộ dịch vụ (Database, Backend, Frontend):
 
 ```bash
-npm install
+docker compose up --build -d
 ```
 
-### Bước 4: Khởi tạo Dữ Liệu (Migrate & Seed)
-
-Hệ thống sử dụng file schema tĩnh. Để khởi tạo tất cả các bảng DB cùng với tài khoản Root Admin đầu tiên, hãy chạy:
-
-```bash
-# 1. Chạy cập nhật bảng (Migration)
-npm run db:migrate
-
-# 2. Sinh tài khoản Admin đầu tiên (Seed)
-npm run seed:admin -- --email=admin@cdshop.com --password=123456
-```
-
-### Bước 5: Khởi Chạy Server Đang Phát Triển (Dev)
-
-```bash
-npm run dev
-```
-
-🎉 **Hoàn thành!** Server Backend hiện đang chạy tại: `http://localhost:8000`.
+Sau khi chạy thành công, các dịch vụ sẽ hoạt động tại:
+- **Frontend Storefront**: `http://localhost:5173` (Cổng mặc định cho cả Customer, Vendor, Admin)
+- **Backend API Server**: `http://localhost:8000`
+- **PostgreSQL Database**: Cổng `5433` (được map từ cổng `5432` trong container)
 
 ---
 
-## 🛠 Các Lệnh Hữu Ích Của Developer (Scripts)
+## 💾 Khởi Tạo Cơ Sở Dữ Liệu & Hạt Giống (Database & Seed)
 
-Nằm trong `backend/package.json`:
+Hệ thống sử dụng PostgreSQL. Để thiết lập database cho lần đầu khởi chạy hoặc làm mới toàn bộ dữ liệu, hãy thực hiện các lệnh sau:
 
-- `npm run dev`: Chạy server dev sử dụng `ts-node` tự động reload.
-- `npm run build`: Biên dịch mã TypeScript thuần sang Javascript Native.
-- `npm run lint`: Chạy ESLint để rà soát lỗi format TypeScript.
-- `npm run test:tsc`: Phân tích tĩnh bắt lỗi logic Type-Checking của toàn hệ thống (không Build).
+### 1. Reset database (Nếu muốn làm sạch toàn bộ dữ liệu cũ)
+```bash
+docker compose exec backend node database/drop.js
+```
+
+### 2. Tạo cấu trúc bảng (Migration)
+Khởi tạo cấu trúc cơ sở dữ liệu chuẩn dựa trên file `schema.sql`:
+```bash
+docker compose exec backend node database/migrate.js
+```
+
+### 3. Seed dữ liệu mẫu hệ thống (Master Seed)
+Khởi tạo dữ liệu cơ bản bao gồm cấu hình phí (fee tiers), tài khoản admin, tài khoản chủ shop, danh mục, và các sản phẩm mẫu:
+```bash
+docker compose exec backend node database/seeds/seed-master.js
+```
+
+### 4. Seed kịch bản đánh giá & đặt hàng (Scenario Seed)
+Khởi tạo kịch bản tự động hóa gồm 60 đơn hàng hoàn thành và 60 đánh giá/phản hồi chi tiết (dành cho người mua và các shop) dựa theo file `tool/review.md` và `tool/kicban.md`:
+```bash
+docker compose exec backend node database/seeds/seed-reviews-kicban.js
+```
 
 ---
 
-## 🔑 Tài Khoản Demo (Seed Data)
+## 🧪 Chạy Kiểm Thử (Run Tests)
 
-Sau khi chạy `npm run db:migrate` và `npm run seed:admin`, hệ thống sẽ có tài khoản Admin đầu tiên với email và mật khẩu bạn truyền vào lệnh seed.
+### Chạy kiểm thử Backend:
+Để kiểm tra tính đúng đắn của toàn bộ các API, phân quyền, và nghiệp vụ tài chính:
+```bash
+docker compose exec backend npm run test
+```
 
-Thông tin đăng nhập của các tài khoản demo **không được lưu trong repo** để tránh rủi ro bảo mật. Vui lòng liên hệ trực tiếp với người quản lý dự án để lấy credentials khi cần.
+### Chạy kiểm thử Frontend:
+```bash
+# Ở môi trường local hoặc chạy trực tiếp qua npm:
+cd frontend/storefront
+npm run test
+```
+
+---
+
+## 🔑 Thông tin Tài khoản Demo mặc định
+
+Sau khi chạy lệnh **Master Seed**, bạn có thể đăng nhập vào hệ thống bằng các tài khoản demo sau:
+
+*   **Super Admin**:
+    *   Email: `admin@reshop.vn`
+    *   Mật khẩu: `admin123@<>`
+*   **Chủ shop Cầu Lông Pro** (Vendor 1):
+    *   Email: `contact@caulongstore.com`
+    *   Mật khẩu: `password123`
+*   **Chủ shop Thế Giới Cầu Lông** (Vendor 2):
+    *   Email: `contact2@caulongstore.com`
+    *   Mật khẩu: `password123`
+*   **Khách hàng Phương Thúy**:
+    *   Email: `phuongthuy@reshop.vn`
+    *   Mật khẩu: `12345678`
+*   **Khách hàng Acerikyl**:
+    *   Email: `acerikyl@gmail.com`
+    *   Mật khẩu: `dung123xzx`
