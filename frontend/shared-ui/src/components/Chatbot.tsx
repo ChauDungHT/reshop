@@ -15,7 +15,7 @@ interface Message {
   isError?: boolean;
 }
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyCpBx5BQz_SmMKpoUgIWxkwdGJRM8fy1xE";
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const API_URL = import.meta.env.VITE_GEMINI_API_URL 
   ? `${import.meta.env.VITE_GEMINI_API_URL}?key=${API_KEY}`
   : `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${API_KEY}`;
