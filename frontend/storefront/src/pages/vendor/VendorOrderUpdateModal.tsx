@@ -7,30 +7,32 @@ interface OrderItem {
   quantity: number;
 }
 
-interface Order {
+export interface VendorSubOrderRow {
   id: string;
   order_code: string;
-  status: string;
-  tracking_code?: string;
+  parent_order_code?: string;
+  parent_order_status: string;
+  sub_order_status: string;
+  tracking_code?: string | null;
   items: OrderItem[];
 }
 
 interface Props {
-  order: Order;
+  subOrder: VendorSubOrderRow;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-const VendorOrderUpdateModal: React.FC<Props> = ({ order, onClose, onSuccess }) => {
-  const [status, setStatus] = useState(order.status);
-  const [trackingCode, setTrackingCode] = useState(order.tracking_code || '');
+const VendorOrderUpdateModal: React.FC<Props> = ({ subOrder, onClose, onSuccess }) => {
+  const [status, setStatus] = useState(subOrder.sub_order_status ?? 'pending');
+  const [trackingCode, setTrackingCode] = useState(subOrder.tracking_code || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      await axiosInstance.put(`/vendor/orders/${order.id}/status`, {
+      await axiosInstance.put(`/vendor/orders/${subOrder.id}/status`, {
         status,
         tracking_code: trackingCode
       });
@@ -58,15 +60,19 @@ const VendorOrderUpdateModal: React.FC<Props> = ({ order, onClose, onSuccess }) 
       <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
         <div className="p-6 border-b border-slate-800 flex items-center justify-between">
           <div>
-            <h3 className="text-xl font-black text-slate-100">Cập nhật đơn hàng</h3>
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-widest mt-1">Mã đơn: #{order.order_code}</p>
+            <h3 className="text-xl font-black text-slate-100">Cập nhật sub_order</h3>
+            <p className="text-xs text-slate-500 font-medium uppercase tracking-widest mt-1">
+              Mã shop: #{subOrder.order_code}
+              {subOrder.parent_order_code ? ` · Đơn cha #${subOrder.parent_order_code}` : ''}
+            </p>
+            <p className="text-[10px] text-slate-600 mt-1">Trạng thái đơn cha: {subOrder.parent_order_status}</p>
           </div>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors text-xl">×</button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Trạng thái đơn hàng</label>
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Trạng thái sub_order</label>
             <div className="grid grid-cols-2 gap-2">
               {statusOptions.map(opt => (
                 <button

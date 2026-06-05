@@ -1,12 +1,51 @@
-import { useEffect } from 'react';
+import { useEffect, Component } from 'react';
+import type { ErrorInfo, ReactNode } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
+import Chatbot from '../components/Chatbot';
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ChatbotErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  public state: ErrorBoundaryState = {
+    hasError: false,
+    error: null
+  };
+
+  public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("Chatbot error caught:", error, errorInfo);
+  }
+
+  public render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ position: 'fixed', bottom: '30px', right: '35px', zIndex: 99999, background: '#fee2e2', border: '1px solid #fca5a5', padding: '15px', borderRadius: '12px', color: '#991b1b', maxWidth: '300px', fontSize: '13px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+          <strong style={{ display: 'block', marginBottom: '5px' }}>⚠️ Lỗi Chatbot</strong>
+          <code style={{ fontSize: '11px', wordBreak: 'break-all' }}>{this.state.error?.message}</code>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const StorefrontLayout = () => {
   const { user, logout } = useAuth();
   const { cartItems } = useCart();
   const navigate = useNavigate();
+
 
   // Chặn Vendor và Admin truy cập Storefront
   useEffect(() => {
@@ -24,7 +63,9 @@ const StorefrontLayout = () => {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans">
+
       {/* Top Navbar */}
+
       <header className="sticky top-0 z-50 border-b border-slate-800 bg-slate-950/90 backdrop-blur-sm">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           {/* Logo */}
@@ -114,6 +155,11 @@ const StorefrontLayout = () => {
       <footer className="border-t border-slate-800 py-8 text-center text-sm text-slate-600">
         © 2026 Reshop · Sàn thương mại điện tử đa nhà bán hàng
       </footer>
+
+      {/* AI Chatbot */}
+      <ChatbotErrorBoundary>
+        <Chatbot />
+      </ChatbotErrorBoundary>
     </div>
   );
 };

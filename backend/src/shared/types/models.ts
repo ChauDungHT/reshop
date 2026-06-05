@@ -1,7 +1,8 @@
 export type UserRole = 'customer' | 'vendor' | 'admin';
 export type VendorStatus = 'inactive' | 'active' | 'banned';
 export type OrderStatus = 'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'returned';
-export type WalletTransactionType = 'deposit' | 'withdraw' | 'refund' | 'payment';
+export type WalletTransactionType = 'deposit' | 'withdraw' | 'refund' | 'payment' | 'pending_credit' | 'pending_release';
+export type OrderFeedbackStatus = 'awaiting_feedback' | 'reviewed' | 'disputed' | 'auto_completed';
 export type ReturnStatus = 'pending_vendor' | 'approved' | 'rejected' | 'escalated' | 'resolved_admin';
 export type ProductStatus = 'active' | 'inactive' | 'out_of_stock' | 'deleted';
 
@@ -12,6 +13,7 @@ export interface IUser {
   role: UserRole;
   status: string;
   wallet_balance: number;
+  pending_balance: number;
   phone?: string | null;
   address?: string | null;
   avatar_url?: string | null;
@@ -43,6 +45,7 @@ export interface ICategory {
   name: string;
   slug: string;
   parent_id?: string | null;
+  sort_order: number;
   created_at: string;
 }
 
@@ -85,12 +88,14 @@ export interface ICartItem {
   product_image?: string;
   product_stock?: number;
   store_name?: string;
+  vendor_id?: string;
   selected?: boolean; // Used in UI state
 }
 
 export interface IOrderItem {
   id: string;
-  order_id: string;
+  order_id: string | null;
+  sub_order_id: string;
   product_id: string;
   quantity: number;
   price_snapshot: number;
@@ -99,6 +104,27 @@ export interface IOrderItem {
   product_name?: string;
   product_image?: string;
   store_name?: string;
+}
+
+export interface ISubOrder {
+  id: string;
+  order_id: string;
+  vendor_id: string;
+  sub_order_code: string;
+  status: OrderStatus;
+  subtotal: number;
+  shipping_fee: number;
+  vendor_discount: number;
+  platform_discount: number; // [Risk 3] Pro-rata voucher
+  refunded_amount: number; // [Risk 5-B] Tổng tiền đã hoàn — không thay đổi subtotal
+  tracking_number?: string | null;
+  feedback_status?: OrderFeedbackStatus | null;
+  delivered_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined fields
+  store_name?: string;
+  items?: IOrderItem[];
 }
 
 export interface IOrder {
@@ -111,6 +137,7 @@ export interface IOrder {
   created_at: string;
   updated_at: string;
   items?: IOrderItem[];
+  sub_orders?: ISubOrder[];
 }
 
 export interface IWalletTransaction {
@@ -160,6 +187,8 @@ export interface IReturnRequest {
   images?: string[] | null;
   status: ReturnStatus;
   reject_reason?: string | null;
+  admin_notes?: string | null;
+  resolved_at?: string | null;
   created_at: string;
   updated_at: string;
 }

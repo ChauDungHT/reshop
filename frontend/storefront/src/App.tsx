@@ -28,14 +28,33 @@ import VendorOrderList from './pages/vendor/VendorOrderList';
 import VendorOrderDetail from './pages/vendor/VendorOrderDetail';
 import VendorReturnList from './pages/vendor/VendorReturnList';
 import VendorQAPage from './pages/vendor/VendorQAPage';
+import VendorFees from './pages/vendor/VendorFees';
 
 import { useAuth } from '../../shared-ui/src/context/AuthContext';
+import DisputeList from './pages/admin/disputes/DisputeList';
+import DisputeDetail from './pages/admin/disputes/DisputeDetail';
+import AdminRoute from '../../shared-ui/src/components/AdminRoute';
+import AdminLayout from '../../shared-ui/src/layouts/AdminLayout';
+import UserList from './pages/admin/users/UserList';
+import CategoryManagement from './pages/admin/categories/CategoryManagement';
+import ShopOversight from './pages/admin/shops/ShopOversight';
+import FeeTierManagement from './pages/admin/fees/FeeTierManagement';
+
+const AdminPlaceholder = ({ title }: { title: string }) => (
+  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-10 text-center flex flex-col items-center justify-center space-y-4 shadow-xl">
+    <span className="text-4xl">🛠️</span>
+    <h3 className="text-xl font-bold text-slate-100">{title}</h3>
+    <p className="text-slate-500 text-sm max-w-md">
+      Trang quản trị này đang được phát triển theo lộ trình và sẽ sớm hoàn thành trong các bước tiếp theo.
+    </p>
+  </div>
+);
 
 const DashboardRouter = () => {
   const { user } = useAuth();
   if (user?.role === 'customer') return <CustomerDashboard />;
   if (user?.role === 'vendor') return <Navigate to="/vendor/dashboard" replace />;
-  if (user?.role === 'admin') return <AdminDashboard />;
+  if (user?.role === 'admin') return <Navigate to="/admin/dashboard" replace />;
   return <Navigate to="/forbidden" replace />;
 };
 
@@ -81,9 +100,32 @@ const App = () => {
             <Route path="/vendor/orders/:id" element={<VendorOrderDetail />} />
             <Route path="/vendor/returns" element={<VendorReturnList />} />
             <Route path="/vendor/qa" element={<VendorQAPage />} />
+            <Route path="/vendor/fees" element={<VendorFees />} />
+          </Route>
+
+          {/* Admin (Old Routes fallback or direct /admin) */}
+          <Route element={<RoleRoute allowedRoles={['admin']} />}>
+            <Route path="/disputes" element={<Navigate to="/admin/disputes" replace />} />
+            <Route path="/disputes/:id" element={<Navigate to="/admin/disputes" replace />} />
           </Route>
 
         </Route>
+
+        {/* New Super Admin Panel Group */}
+        <Route element={<AdminRoute />}>
+          <Route element={<AdminLayout />}>
+            <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="/admin/dashboard" element={<AdminDashboard />} />
+            <Route path="/admin/users" element={<UserList />} />
+            <Route path="/admin/categories" element={<CategoryManagement />} />
+            <Route path="/admin/shops" element={<ShopOversight />} />
+            <Route path="/admin/fees" element={<FeeTierManagement />} />
+            <Route path="/admin/disputes" element={<DisputeList />} />
+            <Route path="/admin/disputes/:id" element={<DisputeDetail />} />
+            <Route path="/admin/settings" element={<AdminPlaceholder title="Cấu Hình Hệ Thống" />} />
+          </Route>
+        </Route>
+
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -4,6 +4,7 @@ import axiosInstance from '@shared-ui/lib/axios';
 interface Order {
   id: string;
   order_code: string;
+  parent_order_code?: string;
 }
 
 interface Props {
@@ -54,7 +55,10 @@ const VendorOrderCancelModal: React.FC<Props> = ({ order, onClose, onSuccess }) 
              <div className="w-10 h-10 rounded-full bg-rose-500/10 flex items-center justify-center text-rose-500 text-xl">⚠️</div>
              <div>
                 <h3 className="text-xl font-black text-slate-100">Xác nhận hủy đơn</h3>
-                <p className="text-xs text-slate-500 font-medium uppercase tracking-widest mt-0.5">#{order.order_code}</p>
+                <p className="text-xs text-slate-500 font-medium uppercase tracking-widest mt-0.5">
+                  #{order.order_code}
+                  {order.parent_order_code ? ` · Gốc #${order.parent_order_code}` : ''}
+                </p>
              </div>
           </div>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors text-xl">×</button>

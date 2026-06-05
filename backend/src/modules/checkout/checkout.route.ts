@@ -9,6 +9,7 @@ router.use(authMiddleware);
 
 router.post('/', checkoutController.processCheckout);
 router.get('/my', checkoutController.getMyOrders);
+router.post('/sub-orders/:id/cancel', checkoutController.cancelSubOrder);
 router.post('/:id/cancel', checkoutController.cancelOrder);
 router.put('/:id/address', checkoutController.updateOrderAddress);
 

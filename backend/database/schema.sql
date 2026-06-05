@@ -6,6 +6,7 @@ DROP TYPE IF EXISTS OrderStatus CASCADE;
 DROP TYPE IF EXISTS WalletTransactionType CASCADE;
 DROP TYPE IF EXISTS ReturnStatus CASCADE;
 DROP TYPE IF EXISTS ProductStatus CASCADE;
+DROP TYPE IF EXISTS OrderFeedbackStatus CASCADE;
 
 CREATE TYPE UserRole AS ENUM ('customer', 'vendor', 'admin');
 
@@ -21,7 +22,9 @@ CREATE TYPE OrderStatus AS ENUM (
     'returned'
 );
 
-CREATE TYPE WalletTransactionType AS ENUM ('deposit', 'withdraw', 'refund', 'payment');
+CREATE TYPE WalletTransactionType AS ENUM ('deposit', 'withdraw', 'refund', 'payment', 'pending_credit', 'pending_release');
+
+CREATE TYPE OrderFeedbackStatus AS ENUM ('awaiting_feedback', 'reviewed', 'disputed', 'auto_completed');
 
 CREATE TYPE ReturnStatus AS ENUM (
     'pending_vendor',
@@ -43,6 +46,7 @@ CREATE TABLE IF NOT EXISTS
         role UserRole DEFAULT 'customer',
         status VARCHAR(20) DEFAULT 'active',
         wallet_balance DECIMAL(15, 2) DEFAULT 0,
+        pending_balance DECIMAL(15, 2) DEFAULT 0,
         phone VARCHAR(20),
         address TEXT,
         avatar_url VARCHAR(255),
@@ -50,6 +54,29 @@ CREATE TABLE IF NOT EXISTS
         created_at TIMESTAMP
         WITH
             TIME ZONE DEFAULT now ()
+    );
+
+-- Fee Tiers Table
+CREATE TABLE IF NOT EXISTS
+    fee_tiers (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+        tier_name VARCHAR(50) UNIQUE NOT NULL,
+        description TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT now (),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT now ()
+    );
+
+-- Fee Tier Items Table
+CREATE TABLE IF NOT EXISTS
+    fee_tier_items (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+        fee_tier_id UUID NOT NULL REFERENCES fee_tiers (id) ON DELETE CASCADE,
+        fee_name VARCHAR(100) NOT NULL,
+        fee_type VARCHAR(20) NOT NULL CHECK (fee_type IN ('percentage', 'fixed')),
+        fee_value DECIMAL(10, 2) NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT now (),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT now (),
+        CONSTRAINT fee_tier_items_tier_name_unique UNIQUE (fee_tier_id, fee_name)
     );
 
 -- Vendors Table
@@ -69,17 +96,47 @@ CREATE TABLE IF NOT EXISTS
         email VARCHAR(150),
         return_policy_days INT DEFAULT 7,
         return_policy_desc TEXT,
+        fee_tier_id UUID REFERENCES fee_tiers (id) ON DELETE SET NULL,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT now (),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT now ()
     );
 
+-- Tool Permissions Table
+CREATE TABLE IF NOT EXISTS
+    tool_permissions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+        tool_code VARCHAR(50) UNIQUE NOT NULL,
+        tool_name VARCHAR(100) NOT NULL,
+        allowed_roles JSONB NOT NULL DEFAULT '[]'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT now (),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT now ()
+    );
+
+-- Seed tool permissions with default values allowing all roles initially
+INSERT INTO tool_permissions (tool_code, tool_name, allowed_roles)
+VALUES
+  ('read_image', 'Đọc thông tin từ hình ảnh', '["admin", "vendor", "customer", "guest"]'::jsonb),
+  ('search_image', 'Tìm kiếm theo hình ảnh', '["admin", "vendor", "customer", "guest"]'::jsonb),
+  ('product_recommendation', 'Gợi ý sản phẩm', '["admin", "vendor", "customer", "guest"]'::jsonb),
+  ('chatbot', 'Chatbot', '["admin", "vendor", "customer", "guest"]'::jsonb),
+  ('customer_consulting', 'Tư vấn khách hàng', '["admin", "vendor", "customer", "guest"]'::jsonb)
+ON CONFLICT (tool_code) DO NOTHING;
+
 -- Categories Table
+-- Cây phân cấp 3 cấp dành cho shop cầu lông:
+--   Cấp 1 (5 nhánh gốc): Vợt cầu lông | Giày cầu lông | Phụ kiện | Quần áo thể thao | Balo & Túi
+--   Cấp 2: Vợt Yonex/Victor/Lining/Mizuno/Kumpoo | Giày nam/nữ/trẻ em |
+--          Cước & Dây | Phụ kiện vợt | Áo/Quần thi đấu | Balo đựng vợt/Túi vợt đơn/Túi vợt đôi
+--   Cấp 3: Yonex Astrox/Nanoflare | Victor Thruster/Jetspeed |
+--          Lining N9/Windstorm | Cước mỏng/dày | Tay cầm & Grip/Giảm chấn
+-- Seed data được quản lý tại: database/seeds/seed-data.js
 CREATE TABLE IF NOT EXISTS
     categories (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
         name VARCHAR(150) NOT NULL,
         slug VARCHAR(150) UNIQUE NOT NULL,
         parent_id UUID REFERENCES categories (id) ON DELETE SET NULL,
+        sort_order INT DEFAULT 0,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT now ()
     );
 
@@ -133,10 +190,31 @@ CREATE TABLE IF NOT EXISTS
         buyer_id UUID NOT NULL REFERENCES users (id) ON DELETE RESTRICT,
         order_code VARCHAR(50) UNIQUE NOT NULL,
         total_amount DECIMAL(15, 2) NOT NULL,
+        refunded_amount DECIMAL(15, 2) DEFAULT 0,         -- [Risk 5-B] accumulated refund total; NEVER modify total_amount
         status OrderStatus DEFAULT 'pending',
         shipping_address JSONB,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT now (),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT now ()
+    );
+
+-- Sub-Orders Table (one per vendor per parent order)
+CREATE TABLE IF NOT EXISTS
+    sub_orders (
+        id                UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+        order_id          UUID NOT NULL REFERENCES orders (id) ON DELETE CASCADE,
+        vendor_id         UUID REFERENCES vendors (id),              -- nullable: orphan fallback [Risk 4]
+        sub_order_code    VARCHAR(60) NOT NULL,                      -- e.g. ORD-20260512-ABCDE-A
+        status            VARCHAR(20) DEFAULT 'pending',
+        subtotal          DECIMAL(15, 2) NOT NULL DEFAULT 0,
+        shipping_fee      DECIMAL(15, 2) DEFAULT 0,
+        vendor_discount   DECIMAL(15, 2) DEFAULT 0,
+        platform_discount DECIMAL(15, 2) DEFAULT 0,                  -- [Risk 3] pro-rata platform voucher
+        refunded_amount   DECIMAL(15, 2) DEFAULT 0,                  -- [Risk 5-B] accumulated refund
+        tracking_number   VARCHAR(100) NULL,
+        feedback_status   OrderFeedbackStatus DEFAULT NULL,
+        delivered_at      TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+        created_at        TIMESTAMP WITH TIME ZONE DEFAULT now (),
+        updated_at        TIMESTAMP WITH TIME ZONE DEFAULT now ()
     );
 
 -- Order Items Table
@@ -144,6 +222,7 @@ CREATE TABLE IF NOT EXISTS
     order_items (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
         order_id UUID NOT NULL REFERENCES orders (id) ON DELETE CASCADE,
+        sub_order_id UUID REFERENCES sub_orders (id) ON DELETE SET NULL,  -- links to vendor sub-order
         product_id UUID NOT NULL REFERENCES products (id) ON DELETE RESTRICT,
         quantity INT NOT NULL
             CHECK (quantity > 0),
@@ -203,6 +282,8 @@ CREATE TABLE IF NOT EXISTS
         images JSONB,
         status ReturnStatus DEFAULT 'pending_vendor',
         reject_reason TEXT,
+        admin_notes TEXT,
+        resolved_at TIMESTAMP WITH TIME ZONE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT now (),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT now ()
     );
@@ -255,6 +336,12 @@ CREATE INDEX IF NOT EXISTS idx_orders_status ON orders (status);
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items (order_id);
 
 CREATE INDEX IF NOT EXISTS idx_order_items_product_id ON order_items (product_id);
+
+CREATE INDEX IF NOT EXISTS idx_order_items_sub_order_id ON order_items (sub_order_id);
+
+CREATE INDEX IF NOT EXISTS idx_sub_orders_order_id ON sub_orders (order_id);
+
+CREATE INDEX IF NOT EXISTS idx_sub_orders_vendor_id ON sub_orders (vendor_id);
 
 CREATE INDEX IF NOT EXISTS idx_wallet_transactions_user_id ON wallet_transactions (user_id);
 

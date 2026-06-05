@@ -3,12 +3,17 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ShopPage from './ShopPage';
 
-const mockGet = vi.fn();
+const { mockGet } = vi.hoisted(() => ({
+  mockGet: vi.fn(),
+}));
+
 vi.mock('../../../../shared-ui/src/lib/axios', () => ({
   default: {
     get: mockGet,
   },
 }));
+
+import { MemoryRouter } from 'react-router-dom';
 
 describe('ShopPage', () => {
   const queryClient = new QueryClient({
@@ -30,7 +35,7 @@ describe('ShopPage', () => {
         return {
           data: {
             data: {
-              products: [
+              items: [
                 { id: 'f1', name: 'Featured Item', price: 1200000, image_urls: [], average_rating: 4.9, category_slug: 'dien-tu' },
               ],
             },
@@ -42,7 +47,7 @@ describe('ShopPage', () => {
         return {
           data: {
             data: {
-              products: [
+              items: [
                 { id: 'p1', name: 'Catalog Item', price: 550000, image_urls: [], average_rating: 4.5, category_slug: 'gia-dung' },
               ],
               total: 1,
@@ -57,7 +62,7 @@ describe('ShopPage', () => {
         return {
           data: {
             data: {
-              products: [
+              items: [
                 { id: 'n1', name: 'Latest Item', price: 990000, image_urls: [], average_rating: 4.7, category_slug: 'thoi-trang' },
               ],
             },
@@ -68,7 +73,7 @@ describe('ShopPage', () => {
       return {
         data: {
           data: {
-            products: [
+            items: [
               { id: 'p1', name: 'Catalog Item', price: 550000, image_urls: [], average_rating: 4.5, category_slug: 'gia-dung' },
             ],
             total: 1,
@@ -81,13 +86,15 @@ describe('ShopPage', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <ShopPage />
+        <MemoryRouter>
+          <ShopPage />
+        </MemoryRouter>
       </QueryClientProvider>
     );
 
-    expect(screen.getByText(/Cửa Hàng/i)).toBeDefined();
-    expect(screen.getByText(/Sản phẩm nổi bật/i)).toBeDefined();
-    expect(screen.getByText(/Mới nhất/i)).toBeDefined();
+    expect(screen.getByText(/Danh sách sản phẩm/i)).toBeDefined();
+    expect(screen.getAllByText(/Sản phẩm nổi bật/i)[0]).toBeDefined();
+    expect(screen.getAllByText(/Mới nhất/i)[0]).toBeDefined();
 
     await waitFor(() => {
       expect(screen.getByText(/Catalog Item/i)).toBeDefined();

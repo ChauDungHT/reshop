@@ -6,6 +6,33 @@ import axiosInstance, { BASE_URL } from '../../../../shared-ui/src/lib/axios';
 
 const formatPrice = (value: number) => `${Number(value).toLocaleString('vi-VN')}₫`;
 
+/** Mirror backend checkout Risk 3 — last vendor gets remainder */
+function allocatePlatformVoucher(
+  vendorSubtotals: Map<string, number>,
+  voucherRaw: number
+): Map<string, number> {
+  const entries = [...vendorSubtotals.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const out = new Map<string, number>();
+  entries.forEach(([k]) => out.set(k, 0));
+  if (entries.length === 0) return out;
+  const totalSub = entries.reduce((s, [, v]) => s + v, 0);
+  if (totalSub <= 0) return out;
+  const voucherAmount = Math.max(0, Number(voucherRaw) || 0);
+  const effective = Math.min(voucherAmount, totalSub);
+  let allocated = 0;
+  for (let i = 0; i < entries.length; i++) {
+    const [vid, sub] = entries[i];
+    if (i === entries.length - 1) {
+      out.set(vid, effective - allocated);
+    } else {
+      const d = Math.floor((effective * sub) / totalSub);
+      out.set(vid, d);
+      allocated += d;
+    }
+  }
+  return out;
+}
+
 const STEPS = [
   { id: 1, title: 'Địa chỉ', icon: '📍' },
   { id: 2, title: 'Vận chuyển', icon: '🚚' },
@@ -30,11 +57,38 @@ const CheckoutPage = () => {
   });
   const [shippingMethod, setShippingMethod] = useState('standard'); // 'standard' (20k), 'fast' (50k)
   const [paymentMethod, setPaymentMethod] = useState('cod'); // 'cod', 'wallet'
+  const [platformVoucher, setPlatformVoucher] = useState('');
 
-  const selectedItems = cartItems.filter(i => i.selected && i.current_stock > 0);
+  const selectedItems = cartItems.filter((i) => i.selected && i.current_stock > 0);
   const subtotal = selectedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const shippingFee = shippingMethod === 'standard' ? 20000 : 50000;
-  const total = subtotal + shippingFee;
+  const voucherNum = Math.max(0, parseInt(platformVoucher.replace(/\D/g, ''), 10) || 0);
+
+  type ShopGroup = { key: string; label: string; items: typeof selectedItems; lineSub: number };
+  const shopGroups: ShopGroup[] = (() => {
+    const m = new Map<string, ShopGroup>();
+    selectedItems.forEach((item) => {
+      const key = item.vendor_id || item.store_name || '_';
+      const label = item.store_name?.trim() || 'Cửa hàng';
+      if (!m.has(key)) m.set(key, { key, label, items: [], lineSub: 0 });
+      const g = m.get(key)!;
+      g.items.push(item);
+      g.lineSub += item.price * item.quantity;
+    });
+    return [...m.values()].sort((a, b) => a.key.localeCompare(b.key));
+  })();
+
+  const vendorSubtotals = new Map<string, number>();
+  shopGroups.forEach((g) => vendorSubtotals.set(g.key, g.lineSub));
+  const platformByVendor = allocatePlatformVoucher(vendorSubtotals, voucherNum);
+
+  let orderTotal = 0;
+  shopGroups.forEach((g, idx) => {
+    const ship = idx === 0 ? shippingFee : 0;
+    const pd = platformByVendor.get(g.key) ?? 0;
+    orderTotal += g.lineSub + ship - pd;
+  });
+  const total = orderTotal;
 
   if (selectedItems.length === 0 && !successOrder) {
     return <Navigate to="/cart" replace />;
@@ -44,9 +98,10 @@ const CheckoutPage = () => {
     setIsSubmitting(true);
     try {
       const payload = {
-        items: selectedItems.map(i => ({ product_id: i.product_id, quantity: i.quantity })),
+        items: selectedItems.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
         shipping_address: { ...addressInfo, shipping_method: shippingMethod },
-        payment_method: paymentMethod
+        payment_method: paymentMethod,
+        ...(voucherNum > 0 ? { platform_voucher_amount: voucherNum } : {}),
       };
 
       const res = await axiosInstance.post('/checkout', payload);
@@ -219,31 +274,75 @@ const CheckoutPage = () => {
         <div className="space-y-6">
           <div className="bg-slate-900 rounded-4xl p-6 border border-white/5 shadow-xl space-y-4">
             <h3 className="font-bold text-white">Xem lại đơn hàng</h3>
-            <div className="max-h-60 overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-slate-700">
-              {selectedItems.map(item => (
-                <div key={item.id} className="flex gap-3 text-xs">
-                  <img 
-                    src={item.image_urls?.[0] ? (item.image_urls[0].startsWith('http') ? item.image_urls[0] : `${BASE_URL}${item.image_urls[0]}`) : ''} 
-                    className="h-10 w-10 rounded-lg object-cover bg-slate-800"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-slate-200 truncate">{item.name}</p>
-                    <p className="text-slate-500">{item.quantity} x {formatPrice(item.price)}</p>
+            <div className="max-h-72 overflow-y-auto space-y-4 pr-2 scrollbar-thin scrollbar-thumb-slate-700">
+              {shopGroups.map((g, idx) => (
+                <div key={g.key} className="rounded-2xl border border-white/10 bg-slate-950/50 p-3 space-y-2">
+                  <div className="flex justify-between items-baseline gap-2">
+                    <p className="text-[11px] font-black text-indigo-300 uppercase tracking-widest truncate">{g.label}</p>
+                    <span className="text-[10px] text-slate-500 shrink-0">{formatPrice(g.lineSub)}</span>
+                  </div>
+                  {idx === 0 && (
+                    <p className="text-[10px] text-slate-600">+ Phí ship toàn đơn: {formatPrice(shippingFee)}</p>
+                  )}
+                  {voucherNum > 0 && (
+                    <p className="text-[10px] text-amber-400/90">
+                      Voucher nền tảng (ước tính shop): −{formatPrice(platformByVendor.get(g.key) ?? 0)}
+                    </p>
+                  )}
+                  <div className="space-y-2 pt-1 border-t border-white/5">
+                    {g.items.map((item) => (
+                      <div key={item.id} className="flex gap-2 text-xs">
+                        <img
+                          src={
+                            item.image_urls?.[0]
+                              ? item.image_urls[0].startsWith('http')
+                                ? item.image_urls[0]
+                                : `${BASE_URL}${item.image_urls[0]}`
+                              : ''
+                          }
+                          alt=""
+                          className="h-9 w-9 rounded-lg object-cover bg-slate-800 shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-slate-200 truncate">{item.name}</p>
+                          <p className="text-slate-500">
+                            {item.quantity} × {formatPrice(item.price)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               ))}
             </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Voucher nền tảng (VNĐ)</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="0 — áp dụng khi thanh toán"
+                value={platformVoucher}
+                onChange={(e) => setPlatformVoucher(e.target.value.replace(/[^\d]/g, ''))}
+                className="w-full bg-slate-950 border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white focus:border-indigo-500 outline-none"
+              />
+            </div>
             <div className="pt-4 border-t border-white/5 space-y-2 text-sm">
               <div className="flex justify-between text-slate-400">
-                <span>Tạm tính:</span>
+                <span>Tạm tính hàng:</span>
                 <span>{formatPrice(subtotal)}</span>
               </div>
               <div className="flex justify-between text-slate-400">
-                <span>Phí ship:</span>
+                <span>Phí ship (1 lần, shop đầu):</span>
                 <span>{formatPrice(shippingFee)}</span>
               </div>
+              {voucherNum > 0 && (
+                <div className="flex justify-between text-amber-400/90 text-xs">
+                  <span>Voucher (tổng ước tính):</span>
+                  <span>−{formatPrice(Math.min(voucherNum, subtotal))}</span>
+                </div>
+              )}
               <div className="flex justify-between text-lg font-black text-white pt-2">
-                <span>Tổng:</span>
+                <span>Tổng thanh toán:</span>
                 <span className="text-emerald-400">{formatPrice(total)}</span>
               </div>
             </div>

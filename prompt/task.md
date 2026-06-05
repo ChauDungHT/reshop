@@ -1,20 +1,17 @@
 # Tiến độ dự án Reshop
 
-## Backend (Vendor Module)
-- [x] 01-database-schema-sync.md
-- [x] 02-image-upload-infrastructure.md
-- [x] 03-vendor-product-api.md
-- [x] 04-vendor-order-return-api.md
-- [x] 05-vendor-dashboard-settings.md
-- [x] 06-pdf-invoice-rendering.md
-- [x] 07-vendor-qa-api.md
+## Backend (Admin Module)
+- [x] prompt-admin-01-user-management.md
+- [x] prompt-admin-02-vendor-approval.md
+- [x] prompt-admin-03-category-management.md
+- [x] prompt-admin-04-shop-management.md
+- [x] prompt-admin-05-dispute-resolution.md
+- [x] prompt-admin-06-analytics-reports.md
 
-## Frontend (Vendor Module)
-- [x] 01-vendor-layout-routing.md
-- [x] 02-shared-components-datatable-statcard.md
-- [x] 03-shared-components-imageuploader-rte.md
-- [/] 04-vendor-dashboard-page.md (KPIs & Recent Orders implemented)
-- [/] 05-vendor-product-pages.md (List & Bulk Stock done; Form & Bulk Actions pending)
-- [x] 06-vendor-order-pages.md (List, Confirm, Cancel, Tracking implemented)
-- [x] 07-vendor-return-pages.md (List, Approve, Reject with reason implemented)
-- [ ] 08-vendor-qa-shop-profile.md
+## Frontend (Admin Module)
+- [x] prompt-admin-01-layout-sidebar.md
+- [x] prompt-admin-02-dashboard-stats.md
+- [x] prompt-admin-03-user-management-ui.md
+- [x] prompt-admin-04-category-tree-ui.md
+- [ ] prompt-admin-05-shop-oversight-ui.md
+- [x] prompt-admin-06-dispute-ui.md

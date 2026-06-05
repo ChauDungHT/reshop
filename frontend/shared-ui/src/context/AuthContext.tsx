@@ -6,6 +6,7 @@ export type { UserRole };
 
 export interface AuthUser extends Omit<IUser, 'status' | 'created_at' | 'last_login_at' | 'avatar_url'> {
   avatar?: string;
+  status?: string;
 }
 
 interface AuthContextType {

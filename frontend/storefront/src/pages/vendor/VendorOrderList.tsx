@@ -14,13 +14,16 @@ interface OrderItem {
 }
 
 interface Order {
+  /** sub_order id — PUT /vendor/orders/:id/status */
   id: string;
   order_code: string;
+  parent_order_code?: string;
   buyer_name: string;
   total_amount: number;
-  status: string;
+  parent_order_status: string;
+  sub_order_status: string;
   created_at: string;
-  tracking_code?: string;
+  tracking_code?: string | null;
   items: OrderItem[];
 }
 
@@ -47,6 +50,9 @@ const VendorOrderList = () => {
       render: (code, row) => (
         <div className="flex flex-col">
           <span className="font-bold text-slate-200">#{code}</span>
+          {row.parent_order_code ? (
+            <span className="text-[10px] text-slate-600">Đơn gốc #{row.parent_order_code}</span>
+          ) : null}
           <span className="text-[10px] text-slate-500">{new Date(row.created_at).toLocaleString('vi-VN')}</span>
         </div>
       )
@@ -78,9 +84,9 @@ const VendorOrderList = () => {
       )
     },
     {
-      key: 'status',
-      header: 'Trạng thái',
-      render: (status) => <OrderBadge status={status} />
+      key: 'sub_order_status',
+      header: 'Trạng thái shop',
+      render: (sub_order_status: string) => <OrderBadge status={sub_order_status} />
     },
     {
       key: 'actions',
@@ -93,7 +99,7 @@ const VendorOrderList = () => {
           >
             Cập nhật
           </button>
-          {(row.status === 'pending' || row.status === 'confirmed') && (
+          {(row.sub_order_status === 'pending' || row.sub_order_status === 'confirmed') && (
             <button 
               onClick={() => setOrderToCancel(row)}
               className="text-[10px] bg-rose-500/10 text-rose-400 px-3 py-1.5 rounded-lg border border-rose-500/20 hover:bg-rose-500/20 transition-all font-bold uppercase tracking-tight"
@@ -160,7 +166,7 @@ const VendorOrderList = () => {
 
       {selectedOrder && (
         <VendorOrderUpdateModal 
-          order={selectedOrder}
+          subOrder={selectedOrder}
           onClose={() => setSelectedOrder(null)}
           onSuccess={() => {
             setSelectedOrder(null);

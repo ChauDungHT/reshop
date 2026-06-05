@@ -9,7 +9,7 @@ export const getProducts = async (req: Request, res: Response): Promise<void> =>
     const { category, category_id, min_price, max_price, is_featured, q, sort, page = '1', limit = '20' } = req.query;
 
     const queryParams: (string | number | boolean)[] = [];
-    const queryConditions: string[] = ["p.status = 'active'"];
+    const queryConditions: string[] = ["p.status = 'active'", "v.status = 'active'"];
 
     if (category_id) {
       queryParams.push(category_id as string);
@@ -56,7 +56,7 @@ export const getProducts = async (req: Request, res: Response): Promise<void> =>
     const limitNum = parseInt(limit as string, 10) || 20;
     const offset = (pageNum - 1) * limitNum;
 
-    const baseFromClause = `FROM products p JOIN categories c ON p.category_id = c.id`;
+    const baseFromClause = `FROM products p JOIN categories c ON p.category_id = c.id JOIN vendors v ON p.vendor_id = v.id`;
     const countQuery = `SELECT COUNT(*) ${baseFromClause} ${whereClause}`;
     const countResult = await db.query(countQuery, queryParams);
     const total = parseInt(countResult.rows[0].count, 10);
@@ -109,7 +109,7 @@ export const getProductById = async (req: Request, res: Response): Promise<void>
              v.store_name, v.slug as vendor_slug, v.status as vendor_status, v.id as vendor_id
       FROM products p
       JOIN vendors v ON p.vendor_id = v.id
-      WHERE p.id = $1 AND p.status = 'active'
+      WHERE p.id = $1 AND p.status = 'active' AND v.status = 'active'
     `;
     const productResult = await db.query(productQuery, [id]);
 
@@ -122,10 +122,11 @@ export const getProductById = async (req: Request, res: Response): Promise<void>
     const product = productResult.rows[0];
 
     const relatedQuery = `
-      SELECT id, name, price, image_urls, average_rating
-      FROM products
-      WHERE category_id = $1 AND id != $2 AND status = 'active'
-      ORDER BY created_at DESC
+      SELECT p.id, p.name, p.price, p.image_urls, p.average_rating
+      FROM products p
+      JOIN vendors v ON p.vendor_id = v.id
+      WHERE p.category_id = $1 AND p.id != $2 AND p.status = 'active' AND v.status = 'active'
+      ORDER BY p.created_at DESC
       LIMIT 4
     `;
     const relatedResult = await db.query(relatedQuery, [product.category_id, id]);

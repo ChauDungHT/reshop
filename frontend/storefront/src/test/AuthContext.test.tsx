@@ -4,6 +4,15 @@ import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider, useAuth } from '../../../shared-ui/src/context/AuthContext';
 import { useEffect } from 'react';
 
+vi.mock('../../../shared-ui/src/lib/axios', () => ({
+  default: {
+    post: vi.fn().mockResolvedValue({ data: { success: true } }),
+    defaults: {
+      baseURL: 'http://localhost:8000/api',
+    },
+  },
+}));
+
 // ─── JWT Mock Token (role: customer) ──────────────────────────────────────
 // Header: {"alg":"HS256","typ":"JWT"}
 // Payload: {"id":"uuid-1234","role":"customer","vendor_id":null,"iat":1000000000,"exp":9999999999}
@@ -12,9 +21,7 @@ const MOCK_CUSTOMER_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6InV1aW
 // ─── Helper Component ─────────────────────────────────────────────────────
 const TestConsumer = ({ onAction }: { onAction?: (ctx: ReturnType<typeof useAuth>) => void }) => {
   const auth = useAuth();
-  useEffect(() => {
-    if (onAction) onAction(auth);
-  }, []);
+  if (onAction) onAction(auth);
   return (
     <div>
       <span data-testid="isAuthenticated">{String(auth.isAuthenticated)}</span>
@@ -78,6 +85,7 @@ describe('AuthContext', () => {
 
   it('should clear state and localStorage on logout()', async () => {
     localStorage.setItem('reshop_token', MOCK_CUSTOMER_TOKEN);
+    localStorage.setItem('reshop_user', JSON.stringify({ id: 'uuid-1234', role: 'customer' }));
     let authCtx: ReturnType<typeof useAuth>;
     render(
       <TestConsumer onAction={(ctx) => { authCtx = ctx; }} />,
@@ -94,6 +102,7 @@ describe('AuthContext', () => {
 
   it('should restore session from localStorage on mount', () => {
     localStorage.setItem('reshop_token', MOCK_CUSTOMER_TOKEN);
+    localStorage.setItem('reshop_user', JSON.stringify({ id: 'uuid-1234', role: 'customer' }));
     render(<TestConsumer />, { wrapper });
     expect(screen.getByTestId('isAuthenticated').textContent).toBe('true');
     expect(screen.getByTestId('role').textContent).toBe('customer');

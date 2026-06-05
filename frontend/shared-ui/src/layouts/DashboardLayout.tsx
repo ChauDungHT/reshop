@@ -24,11 +24,13 @@ const navByRole: Record<UserRole, NavItem[]> = {
     { label: 'Trả hàng', path: '/vendor/returns', icon: '↩️' },
     { label: 'Hỏi & Đáp', path: '/vendor/qa', icon: '💬' },
     { label: 'Gian hàng', path: '/vendor/shop-profile', icon: '🏪' },
+    { label: 'Phí sản phẩm', path: '/vendor/fees', icon: '💸' },
   ],
   admin: [
     { label: 'Tổng quan', path: '/dashboard', icon: '🌐' },
     { label: 'Người dùng', path: '/users', icon: '👥' },
     { label: 'Vendors', path: '/vendors', icon: '🏪' },
+    { label: 'Tranh chấp', path: '/disputes', icon: '⚖️' },
     { label: 'Cấu hình', path: '/settings', icon: '⚙️' },
     { label: 'Báo cáo', path: '/reports', icon: '📑' },
   ],
@@ -36,7 +38,7 @@ const navByRole: Record<UserRole, NavItem[]> = {
 
 const roleLabel: Record<UserRole, string> = {
   customer: 'Khách Hàng',
-  vendor: 'Nhà Bán Hàng',
+  vendor: 'Trung tâm Nhà bán hàng',
   admin: 'Quản Trị Viên',
 };
 
@@ -201,6 +203,12 @@ const DashboardLayout = () => {
           </div>
         </header>
         <div className="p-6">
+          {user.role === 'vendor' && user.status === 'pending_approval' && (
+            <div className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300">
+              <p className="font-bold">Tài khoản đang chờ phê duyệt</p>
+              <p className="text-sm mt-1 text-slate-400">Menu bị hạn chế cho đến khi tài khoản được duyệt.</p>
+            </div>
+          )}
           <Outlet />
         </div>
       </main>

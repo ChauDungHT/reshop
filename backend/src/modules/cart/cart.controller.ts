@@ -26,6 +26,7 @@ export const getCart = async (req: Request, res: Response): Promise<void> => {
         p.price as product_price, 
         p.stock as product_stock,
         p.image_urls->>0 as product_image,
+        p.vendor_id,
         v.store_name
       FROM cart_items c
       JOIN products p ON c.product_id = p.id

@@ -11,6 +11,8 @@ export interface CartItem {
   quantity: number;
   current_stock: number;
   image_urls: string[] | null;
+  vendor_id?: string;
+  store_name?: string;
   selected?: boolean;
 }
 
@@ -30,6 +32,21 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_KEY = 'reshop_cart';
 
+// Normalize raw API response to CartItem shape
+// Backend returns: product_name, product_price, product_stock, product_image
+const normalizeCartItem = (raw: Record<string, unknown>, selected = true): CartItem => ({
+  id: raw.id as string,
+  product_id: raw.product_id as string,
+  name: (raw.name ?? raw.product_name) as string,
+  price: (raw.price ?? raw.product_price) as number,
+  quantity: raw.quantity as number,
+  current_stock: (raw.current_stock ?? raw.product_stock) as number,
+  image_urls: raw.image_urls as string[] | null ?? null,
+  vendor_id: raw.vendor_id as string | undefined,
+  store_name: (raw.store_name as string | undefined) ?? undefined,
+  selected,
+});
+
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -43,7 +60,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           const res = await axiosInstance.get<IApiResponse<CartItem[]>>('/cart');
           if (res.data.success) {
-            setCartItems(res.data.data.map((item) => ({ ...item, selected: true })));
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            setCartItems((res.data.data as any[]).map((item) => normalizeCartItem(item, true)));
           }
         } catch (err) {
           console.error('Failed to fetch cart from server', err);
@@ -84,7 +102,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Refresh cart from server
       const res = await axiosInstance.get<IApiResponse<CartItem[]>>('/cart');
       if (res.data.success) {
-        setCartItems(res.data.data.map((item) => ({ ...item, selected: true })));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        setCartItems((res.data.data as any[]).map((item) => normalizeCartItem(item, true)));
       }
       localStorage.removeItem(LOCAL_STORAGE_KEY);
     } catch (err) {
@@ -104,7 +123,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         await axiosInstance.post('/cart', { product_id: product.id, quantity });
         const res = await axiosInstance.get<IApiResponse<CartItem[]>>('/cart');
-        setCartItems(res.data.data.map((item) => ({ ...item, selected: true })));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        setCartItems((res.data.data as any[]).map((item) => normalizeCartItem(item, true)));
       } catch (err) {
         console.error('Add to cart failed', err);
       }

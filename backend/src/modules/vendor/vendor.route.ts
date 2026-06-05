@@ -15,7 +15,8 @@ import {
   getVendorDashboard,
   getVendorProfile,
   updateVendorProfile,
-  exportOrderPDF
+  exportOrderPDF,
+  getVendorFees
 } from './vendor.controller';
 import { getVendorQA, answerQuestion } from '../after-sales/after-sales.controller';
 import { authMiddleware } from '../../shared/middlewares/auth.middleware';
@@ -38,6 +39,10 @@ router.put('/shop',
   processProductImages, 
   updateVendorProfile
 );
+
+// Quản lý biểu phí (Prompt 11)
+router.get('/fees', getVendorFees);
+
 
 // Quản lý sản phẩm (Prompt 03)
 router.get('/products', getVendorProducts);

@@ -85,12 +85,14 @@ export interface ICartItem {
   product_image?: string;
   product_stock?: number;
   store_name?: string;
+  vendor_id?: string;
   selected?: boolean; // Used in UI state
 }
 
 export interface IOrderItem {
   id: string;
-  order_id: string;
+  order_id: string | null;
+  sub_order_id: string;
   product_id: string;
   quantity: number;
   price_snapshot: number;
@@ -99,6 +101,26 @@ export interface IOrderItem {
   product_name?: string;
   product_image?: string;
   store_name?: string;
+  image_urls?: string[]; // For easier access in UI, derived from product_image or product's image_urls
+}
+
+export interface ISubOrder {
+  id: string;
+  order_id: string;
+  vendor_id: string;
+  sub_order_code: string;
+  status: OrderStatus;
+  subtotal: number;
+  shipping_fee: number;
+  vendor_discount: number;
+  platform_discount: number; // [Risk 3] Pro-rata voucher
+  refunded_amount: number; // [Risk 5-B] Tổng tiền đã hoàn — không thay đổi subtotal
+  tracking_number?: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined fields
+  store_name?: string;
+  items?: IOrderItem[];
 }
 
 export interface IOrder {
@@ -111,6 +133,7 @@ export interface IOrder {
   created_at: string;
   updated_at: string;
   items?: IOrderItem[];
+  sub_orders?: ISubOrder[];
 }
 
 export interface IWalletTransaction {

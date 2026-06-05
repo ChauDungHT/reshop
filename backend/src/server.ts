@@ -10,6 +10,12 @@ import cartRoutes from './modules/cart/cart.route';
 import checkoutRoutes from './modules/checkout/checkout.route';
 import afterSalesRoutes from './modules/after-sales/after-sales.route';
 import vendorRoutes from './modules/vendor/vendor.route';
+import adminUserRoutes from './modules/identity/admin-user.route';
+import adminCategoryRoutes from './modules/catalog/admin-category.route';
+import adminShopRoutes from './modules/vendor/admin-shop.route';
+import adminFeeRoutes from './modules/vendor/admin-fee.route';
+import adminDisputeRoutes from './modules/after-sales/admin-dispute.route';
+import toolPermissionRoutes from './modules/identity/tool-permission.route';
 
 const app: Express = express();
 const port = process.env.PORT || 8000;
@@ -30,6 +36,12 @@ app.use('/api/cart', cartRoutes);
 app.use('/api/checkout', checkoutRoutes);
 app.use('/api/after-sales', afterSalesRoutes);
 app.use('/api/vendor', vendorRoutes);
+app.use('/api/admin', adminUserRoutes);
+app.use('/api/admin/categories', adminCategoryRoutes);
+app.use('/api/admin/shops', adminShopRoutes);
+app.use('/api/admin/fees', adminFeeRoutes);
+app.use('/api/admin/disputes', adminDisputeRoutes);
+app.use('/api/tool-permissions', toolPermissionRoutes);
 
 // Global Error Handler
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
@@ -41,6 +53,9 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   });
 });
 
+import { initCronJobs } from './core/cron';
+
 app.listen(port, () => {
   console.log(`[server]: Server is running at http://localhost:${port}`);
+  initCronJobs();
 });

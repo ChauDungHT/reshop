@@ -8,53 +8,87 @@ import path from 'path';
 import { UploadRequest } from '../../shared/types/request';
 import { IOrder, IReturnRequest, IProduct, IVendor } from '../../shared/types/models';
 import { IPaginatedData } from '../../shared/types/api';
+import { calculateVendorFee } from '../../shared/fee-calculator';
 
 // Đăng ký helper cho handlebars
 handlebars.registerHelper('formatCurrency', (value) => {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 });
 
+/** Rollup parent `orders.status` from all `sub_orders.status` (Phase 4 / review.md). */
+function rollupOrderStatusFromSubOrders(distinctStatuses: string[]): string {
+  const list = [...new Set(distinctStatuses)];
+  const all = (pred: (s: string) => boolean) => list.length > 0 && list.every(pred);
+  const some = (pred: (s: string) => boolean) => list.some(pred);
+
+  if (all((s) => s === 'cancelled')) return 'cancelled';
+  if (all((s) => s === 'pending')) return 'pending';
+  if (all((s) => s === 'delivered' || s === 'cancelled') && some((s) => s === 'delivered')) return 'delivered';
+  if (some((s) => s === 'shipped')) return 'shipped';
+  if (some((s) => s === 'processing')) return 'processing';
+  if (some((s) => s === 'confirmed')) return 'confirmed';
+  return 'pending';
+}
+
 /**
  * 1. GET /api/vendor/orders
- * Lấy danh sách đơn hàng có chứa sản phẩm của Shop
+ * Mỗi dòng = một sub_order của shop (join orders, order_items, products).
  */
 export const getVendorOrders = async (req: Request, res: Response): Promise<void> => {
   try {
     const vendorId = req.user?.vendor_id;
+    if (!vendorId) {
+      sendResponse(res, 403, false, 'Vendor context required.', null);
+      return;
+    }
+
     const { status, page = '1', limit = '20' } = req.query;
 
     const queryParams: any[] = [vendorId];
-    const queryConditions: string[] = [
-      `EXISTS (SELECT 1 FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE oi.order_id = o.id AND p.vendor_id = $1)`
-    ];
-
+    let statusClause = '';
     if (status && status !== 'all') {
       queryParams.push(status);
-      queryConditions.push(`o.status = $${queryParams.length}`);
+      statusClause = `AND so.status = $${queryParams.length}`;
     }
 
-    const whereClause = `WHERE ${queryConditions.join(' AND ')}`;
     const pageNum = parseInt(page as string, 10) || 1;
     const limitNum = parseInt(limit as string, 10) || 20;
     const offset = (pageNum - 1) * limitNum;
 
-    const countQuery = `SELECT COUNT(*) FROM orders o ${whereClause}`;
+    const countQuery = `SELECT COUNT(*)::int AS c FROM sub_orders so WHERE so.vendor_id = $1::uuid ${statusClause}`;
     const countRes = await db.query(countQuery, queryParams);
-    const total = parseInt(countRes.rows[0].count);
+    const total = countRes.rows[0].c;
 
+    const limIdx = queryParams.length + 1;
+    const offIdx = queryParams.length + 2;
     const dataQuery = `
-      SELECT o.*, u.name as buyer_name,
-             (SELECT json_agg(item_info) FROM (
-               SELECT oi.*, p.name as product_name, p.image_urls
-               FROM order_items oi
-               JOIN products p ON oi.product_id = p.id
-               WHERE oi.order_id = o.id AND p.vendor_id = $1
-             ) item_info) as items
-      FROM orders o
+      SELECT
+        so.id,
+        so.sub_order_code AS order_code,
+        o.order_code AS parent_order_code,
+        o.id AS parent_order_id,
+        so.status AS sub_order_status,
+        o.status AS parent_order_status,
+        (so.subtotal + so.shipping_fee - so.vendor_discount - so.platform_discount) AS total_amount,
+        so.tracking_number AS tracking_code,
+        so.created_at,
+        u.name AS buyer_name,
+        (
+          SELECT COALESCE(json_agg(item_row ORDER BY item_row.created_at), '[]'::json)
+          FROM (
+            SELECT oi.id, oi.order_id, oi.sub_order_id, oi.product_id, oi.quantity, oi.price_snapshot, oi.created_at,
+                   p.name AS product_name, p.image_urls
+            FROM order_items oi
+            JOIN products p ON oi.product_id = p.id
+            WHERE oi.sub_order_id = so.id
+          ) item_row
+        ) AS items
+      FROM sub_orders so
+      JOIN orders o ON o.id = so.order_id
       JOIN users u ON o.buyer_id = u.id
-      ${whereClause}
-      ORDER BY o.created_at DESC
-      LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}
+      WHERE so.vendor_id = $1::uuid ${statusClause}
+      ORDER BY so.created_at DESC
+      LIMIT $${limIdx} OFFSET $${offIdx}
     `;
 
     const result = await db.query(dataQuery, [...queryParams, limitNum, offset]);
@@ -65,7 +99,7 @@ export const getVendorOrders = async (req: Request, res: Response): Promise<void
       total,
       page: pageNum,
       limit: limitNum,
-      total_pages: Math.ceil(total / limitNum)
+      total_pages: Math.ceil(total / limitNum),
     });
   } catch (err) {
     console.error('Error getVendorOrders:', err);
@@ -75,72 +109,157 @@ export const getVendorOrders = async (req: Request, res: Response): Promise<void
 
 /**
  * 2. PUT /api/vendor/orders/:id/status
+ * `:id` = sub_order id. Risk 2: lock sub_order → lock parent order → read DISTINCT sub status → rollup orders.status.
  */
 export const updateOrderStatus = async (req: Request, res: Response): Promise<void> => {
   const client = await db.pool.connect();
   try {
-    const { id } = req.params;
-    const { status, tracking_code } = req.body;
+    const subOrderId = typeof req.params.id === 'string' ? req.params.id : req.params.id?.[0];
+    const { status, tracking_code } = req.body as { status?: string; tracking_code?: string };
     const vendorId = req.user?.vendor_id;
+
+    if (!subOrderId || !vendorId) {
+      sendResponse(res, 400, false, 'Thiếu thông tin.');
+      return;
+    }
 
     await client.query('BEGIN');
 
-    // 1. Kiểm tra quyền sở hữu và trạng thái hiện tại
-    const orderRes = await client.query(
-      `SELECT o.status, o.order_code
-       FROM orders o
-       JOIN order_items oi ON o.id = oi.order_id
-       JOIN products p ON oi.product_id = p.id
-       WHERE o.id = $1 AND p.vendor_id = $2
-       LIMIT 1 FOR UPDATE`,
-      [id, vendorId]
+    const subRes = await client.query(
+      `SELECT so.id, so.status, so.order_id, so.subtotal, so.shipping_fee, so.vendor_discount, so.platform_discount
+       FROM sub_orders so
+       WHERE so.id = $1::uuid AND so.vendor_id = $2::uuid
+       FOR UPDATE OF so`,
+      [subOrderId, vendorId]
     );
 
-    if (orderRes.rows.length === 0) {
-      sendResponse(res, 403, false, 'Bạn không có quyền cập nhật đơn hàng này.');
+    if (subRes.rows.length === 0) {
       await client.query('ROLLBACK');
+      sendResponse(res, 404, false, 'Không tìm thấy đơn theo shop.');
       return;
     }
 
-    const currentStatus = orderRes.rows[0].status;
+    const { order_id: orderId, status: currentSubStatus } = subRes.rows[0] as {
+      order_id: string;
+      status: string;
+    };
+
+    await client.query(`SELECT id, status FROM orders WHERE id = $1::uuid FOR UPDATE`, [orderId]);
+
+    const myItemsRes = await client.query(
+      `SELECT oi.id, oi.product_id, oi.quantity
+       FROM order_items oi
+       WHERE oi.sub_order_id = $1::uuid`,
+      [subOrderId]
+    );
+
+    if (myItemsRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      sendResponse(res, 400, false, 'Đơn con không có dòng sản phẩm.');
+      return;
+    }
+
+    const validTransitions: Record<string, string[]> = {
+      pending: ['confirmed', 'cancelled'],
+      confirmed: ['processing', 'shipped', 'cancelled'],
+      processing: ['shipped', 'cancelled'],
+      shipped: ['delivered'],
+      delivered: [],
+      cancelled: [],
+    };
+
+    if (!status || !validTransitions[currentSubStatus]?.includes(status)) {
+      await client.query('ROLLBACK');
+      sendResponse(res, 400, false, `Không thể chuyển từ "${currentSubStatus}" sang "${status || ''}".`);
+      return;
+    }
 
     if (status === 'shipped' && !tracking_code) {
-      sendResponse(res, 400, false, 'Cần có mã vận đơn (tracking code) khi chuyển sang trạng thái Đang giao.');
       await client.query('ROLLBACK');
+      sendResponse(res, 400, false, 'Cần có mã vận đơn (tracking_code) khi chuyển sang Đang giao.');
       return;
     }
 
-    // 2. Logic xử lý khi TỪ CHỐI (cancelled)
     if (status === 'cancelled') {
-      if (currentStatus !== 'pending' && currentStatus !== 'confirmed') {
-        sendResponse(res, 400, false, 'Không thể hủy đơn hàng ở trạng thái hiện tại.');
-        await client.query('ROLLBACK');
-        return;
-      }
-
-      // Hoàn lại tồn kho cho sản phẩm của vendor này
-      const itemsRes = await client.query(
-        `SELECT oi.product_id, oi.quantity 
-         FROM order_items oi 
-         JOIN products p ON oi.product_id = p.id
-         WHERE oi.order_id = $1 AND p.vendor_id = $2`,
-        [id, vendorId]
-      );
-
-      for (const item of itemsRes.rows) {
-        await client.query('UPDATE products SET stock = stock + $1 WHERE id = $2', [item.quantity, item.product_id]);
+      for (const item of myItemsRes.rows) {
+        await client.query(`UPDATE products SET stock = stock + $1 WHERE id = $2`, [item.quantity, item.product_id]);
       }
     }
 
-    // 3. Cập nhật trạng thái
-    await client.query(
-      `UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2`,
-      [status, id]
-    );
+    if (status === 'delivered') {
+      const vendorQuery = await client.query(
+        `SELECT user_id 
+         FROM vendors 
+         WHERE id = $1::uuid`,
+        [vendorId]
+      );
+      if (vendorQuery.rows.length === 0) {
+        await client.query('ROLLBACK');
+        sendResponse(res, 400, false, 'Không tìm thấy thông tin người bán.');
+        return;
+      }
+      const { user_id: vendorUserId } = vendorQuery.rows[0];
+
+      const subtotal = parseFloat(subRes.rows[0].subtotal);
+      const shippingFee = parseFloat(subRes.rows[0].shipping_fee || 0);
+      const vendorDiscount = parseFloat(subRes.rows[0].vendor_discount || 0);
+      const platformDiscount = parseFloat(subRes.rows[0].platform_discount || 0);
+
+      const grossAmount = subtotal + shippingFee - vendorDiscount - platformDiscount;
+      const { netAmount } = await calculateVendorFee(client, vendorId, grossAmount);
+
+      const userUpdateRes = await client.query(
+        `UPDATE users 
+         SET pending_balance = pending_balance + $1 
+         WHERE id = $2::uuid 
+         RETURNING wallet_balance`,
+        [netAmount, vendorUserId]
+      );
+      if (userUpdateRes.rows.length === 0) {
+        await client.query('ROLLBACK');
+        sendResponse(res, 404, false, 'Không tìm thấy tài khoản người bán.');
+        return;
+      }
+      const balanceAfter = parseFloat(userUpdateRes.rows[0].wallet_balance);
+
+      await client.query(
+        `INSERT INTO wallet_transactions (user_id, amount, type, ref_id, balance_after)
+         VALUES ($1::uuid, $2, 'pending_credit', $3::uuid, $4)`,
+        [vendorUserId, netAmount, subOrderId, balanceAfter]
+      );
+
+      await client.query(
+        `UPDATE sub_orders
+         SET status = $1,
+             feedback_status = 'awaiting_feedback',
+             delivered_at = NOW(),
+             tracking_number = COALESCE(NULLIF(TRIM(COALESCE($2::text, '')), ''), tracking_number),
+             updated_at = NOW()
+         WHERE id = $3::uuid AND vendor_id = $4::uuid`,
+        [status, tracking_code ?? null, subOrderId, vendorId]
+      );
+    } else {
+      await client.query(
+        `UPDATE sub_orders
+         SET status = $1,
+             tracking_number = COALESCE(NULLIF(TRIM(COALESCE($2::text, '')), ''), tracking_number),
+             updated_at = NOW()
+         WHERE id = $3::uuid AND vendor_id = $4::uuid`,
+        [status, tracking_code ?? null, subOrderId, vendorId]
+      );
+    }
+
+    const distinctRes = await client.query(`SELECT DISTINCT status FROM sub_orders WHERE order_id = $1::uuid`, [
+      orderId,
+    ]);
+    const distinctStatuses = distinctRes.rows.map((r: { status: string }) => r.status);
+    const newParentStatus = rollupOrderStatusFromSubOrders(distinctStatuses);
+
+    await client.query(`UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2::uuid`, [newParentStatus, orderId]);
 
     await client.query('COMMIT');
-    console.log(`[vendor]: Order Status Updated - ID: ${id}, Status: ${status}`);
-    sendResponse<null>(res, 200, true, `Đã ${status === 'processing' ? 'duyệt' : 'từ chối'} đơn hàng thành công.`, null);
+    console.log(`[vendor]: Sub-order status updated - sub_order: ${subOrderId}, vendor: ${vendorId}, status: ${status}`);
+    sendResponse<null>(res, 200, true, 'Cập nhật trạng thái đơn hàng thành công.', null);
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Error updateOrderStatus:', err);
@@ -149,6 +268,7 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
     client.release();
   }
 };
+
 
 /**
  * 3. GET /api/vendor/returns
@@ -206,12 +326,13 @@ export const approveReturnByVendor = async (req: Request, res: Response): Promis
 
     // Get info & Lock
     const reqRes = await client.query(
-      `SELECT rr.id, rr.status, oi.product_id, oi.quantity, oi.price_snapshot, o.buyer_id, p.vendor_id
+      `SELECT rr.id, rr.status, oi.product_id, oi.quantity, oi.price_snapshot, oi.sub_order_id, o.buyer_id, p.vendor_id
        FROM return_requests rr
        JOIN order_items oi ON rr.order_item_id = oi.id
        JOIN products p ON oi.product_id = p.id
        JOIN orders o ON oi.order_id = o.id
-       WHERE rr.id = $1 FOR UPDATE`,
+       WHERE rr.id = $1::uuid
+       FOR UPDATE OF rr`,
       [id]
     );
 
@@ -219,24 +340,43 @@ export const approveReturnByVendor = async (req: Request, res: Response): Promis
     if (reqRes.rows[0].vendor_id !== vendorId) throw new Error('FORBIDDEN');
     if (reqRes.rows[0].status !== 'pending_vendor') throw new Error('ALREADY_PROCESSED');
 
-    const { product_id, quantity, price_snapshot, buyer_id } = reqRes.rows[0];
-    const refundAmount = parseFloat(price_snapshot) * quantity;
+    const row = reqRes.rows[0] as {
+      product_id: string;
+      quantity: number;
+      price_snapshot: string | number;
+      buyer_id: string;
+      sub_order_id: string | null;
+    };
+    if (!row.sub_order_id) throw new Error('MISSING_SUB_ORDER');
 
-    // A. Update status
-    await client.query(`UPDATE return_requests SET status = 'approved', updated_at = NOW() WHERE id = $1`, [id]);
+    const refundAmount = parseFloat(String(row.price_snapshot)) * row.quantity;
 
-    // B. Refund to buyer wallet
-    await client.query(`UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id = $2`, [refundAmount, buyer_id]);
-    
-    // C. Log Transaction
+    await client.query(`SELECT id FROM sub_orders WHERE id = $1::uuid FOR UPDATE`, [row.sub_order_id]);
+    await client.query(`SELECT id FROM users WHERE id = $1::uuid FOR UPDATE`, [row.buyer_id]);
+
+    await client.query(`UPDATE return_requests SET status = 'approved', updated_at = NOW() WHERE id = $1::uuid`, [id]);
+
+    await client.query(`UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id = $2::uuid`, [
+      refundAmount,
+      row.buyer_id,
+    ]);
+
+    // Get the updated wallet balance for logging
+    const walletRes = await client.query(`SELECT wallet_balance FROM users WHERE id = $1`, [row.buyer_id]);
+    const newBalance = parseFloat(walletRes.rows[0].wallet_balance);
+
     await client.query(
-      `INSERT INTO wallet_transactions (user_id, amount, type, ref_id, balance_after) 
-       VALUES ($1, $2, 'refund', $3, (SELECT wallet_balance FROM users WHERE id = $1))`,
-      [buyer_id, refundAmount, id]
+      `INSERT INTO wallet_transactions (user_id, amount, type, ref_id, balance_after)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [row.buyer_id, refundAmount, 'refund', row.sub_order_id, newBalance]
     );
 
-    // D. Return Stock
-    await client.query(`UPDATE products SET stock = stock + $1 WHERE id = $2`, [quantity, product_id]);
+    await client.query(
+      `UPDATE sub_orders SET refunded_amount = refunded_amount + $1, updated_at = NOW() WHERE id = $2::uuid`,
+      [refundAmount, row.sub_order_id]
+    );
+
+    await client.query(`UPDATE products SET stock = stock + $1 WHERE id = $2::uuid`, [row.quantity, row.product_id]);
 
     await client.query('COMMIT');
     console.log(`[vendor]: Return Approved - ID: ${id}`);
@@ -247,6 +387,9 @@ export const approveReturnByVendor = async (req: Request, res: Response): Promis
     if (err.message === 'NOT_FOUND') sendResponse<null>(res, 404, false, 'Không tìm thấy yêu cầu.', null);
     else if (err.message === 'FORBIDDEN') sendResponse<null>(res, 403, false, 'Bạn không có quyền xử lý yêu cầu này.', null);
     else if (err.message === 'ALREADY_PROCESSED') sendResponse<null>(res, 400, false, 'Yêu cầu này đã được xử lý hoặc không hợp lệ.', null);
+    else if (err.message === 'MISSING_SUB_ORDER') {
+      sendResponse<null>(res, 400, false, 'Dòng đơn không gắn sub_order.', null);
+    }
     else sendResponse<null>(res, 500, false, 'Internal Server Error', null);
   } finally {
     client.release();
@@ -714,41 +857,70 @@ export const updateVendorProfile = async (req: UploadRequest, res: Response): Pr
 export const exportOrderPDF = async (req: Request, res: Response): Promise<void> => {
   let browser;
   try {
-    const { id } = req.params;
+    const subOrderId = typeof req.params.id === 'string' ? req.params.id : req.params.id?.[0];
     const vendorId = req.user?.vendor_id;
 
-    // 1. Lấy dữ liệu đơn hàng
-    const orderRes = await db.query(`
-      SELECT o.*, u.name as buyer_name
-      FROM orders o
-      JOIN users u ON o.buyer_id = u.id
-      WHERE o.id = $1
-    `, [id]);
-
-    if (orderRes.rows.length === 0) {
-      sendResponse(res, 404, false, 'Không tìm thấy đơn hàng');
+    if (!subOrderId || !vendorId) {
+      sendResponse(res, 400, false, 'Thiếu thông tin.');
       return;
     }
 
-    const order = orderRes.rows[0];
+    const subRes = await db.query(
+      `
+      SELECT
+        so.id AS sub_order_pk,
+        so.sub_order_code,
+        so.subtotal,
+        so.shipping_fee,
+        so.vendor_discount,
+        so.platform_discount,
+        so.created_at AS sub_order_created_at,
+        o.id,
+        o.order_code AS parent_order_code,
+        o.buyer_id,
+        o.total_amount AS parent_total_amount,
+        o.status,
+        o.shipping_address,
+        o.created_at,
+        u.name AS buyer_name
+      FROM sub_orders so
+      JOIN orders o ON o.id = so.order_id
+      JOIN users u ON o.buyer_id = u.id
+      WHERE so.id = $1::uuid AND so.vendor_id = $2::uuid
+    `,
+      [subOrderId, vendorId]
+    );
 
-    // 2. Lấy danh sách sản phẩm thuộc vendor này trong đơn hàng
-    const itemsRes = await db.query(`
-      SELECT oi.*, p.name as product_name, (oi.price_snapshot * oi.quantity) as subtotal
+    if (subRes.rows.length === 0) {
+      sendResponse(res, 404, false, 'Không tìm thấy đơn theo shop hoặc không thuộc shop của bạn.');
+      return;
+    }
+
+    const row = subRes.rows[0];
+    const order = row;
+    const lineTotal =
+      parseFloat(String(row.subtotal)) +
+      parseFloat(String(row.shipping_fee)) -
+      parseFloat(String(row.vendor_discount)) -
+      parseFloat(String(row.platform_discount));
+
+    const itemsRes = await db.query(
+      `
+      SELECT oi.*, p.name AS product_name, (oi.price_snapshot * oi.quantity) AS subtotal
       FROM order_items oi
       JOIN products p ON oi.product_id = p.id
-      WHERE oi.order_id = $1 AND p.vendor_id = $2
-    `, [id, vendorId]);
+      WHERE oi.sub_order_id = $1::uuid
+    `,
+      [subOrderId]
+    );
 
     if (itemsRes.rows.length === 0) {
-      sendResponse(res, 403, false, 'Bạn không có quyền xuất hóa đơn cho đơn hàng này');
+      sendResponse(res, 400, false, 'Không có dòng sản phẩm cho đơn này.');
       return;
     }
 
-    // 3. Lấy thông tin Vendor
-    const vendorRes = await db.query("SELECT * FROM vendors WHERE id = $1", [vendorId]);
+    const vendorRes = await db.query('SELECT * FROM vendors WHERE id = $1', [vendorId]);
 
-    // 4. Chuẩn bị Template HTML
     const templatePath = path.join(__dirname, '../../shared/templates/invoice.html');
     if (!fs.existsSync(templatePath)) {
       throw new Error('Template file not found');
@@ -758,33 +930,34 @@ export const exportOrderPDF = async (req: Request, res: Response): Promise<void>
 
     const data = {
       ...order,
-      created_at: new Date(order.created_at).toLocaleDateString('vi-VN'),
-      shipping_address: typeof order.shipping_address === 'string' ? JSON.parse(order.shipping_address) : order.shipping_address,
+      order_code: row.sub_order_code,
+      total_amount: lineTotal,
+      created_at: new Date(row.sub_order_created_at).toLocaleDateString('vi-VN'),
+      shipping_address:
+        typeof order.shipping_address === 'string' ? JSON.parse(order.shipping_address) : order.shipping_address,
       items: itemsRes.rows,
-      vendor: vendorRes.rows[0]
+      vendor: vendorRes.rows[0],
     };
 
     const html = template(data);
 
-    // 5. Render sang PDF bằng Puppeteer
-    browser = await puppeteer.launch({ 
+    browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'] // Quan trọng khi chạy trong container/linux
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
-    const pdfBuffer = await page.pdf({ 
-      format: 'A4', 
+    await page.setContent(html, { waitUntil: 'load' });
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
       printBackground: true,
-      margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' }
+      margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' },
     });
 
-    // 6. Gửi phản hồi PDF
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=invoice-${order.order_code}.pdf`);
+    res.setHeader('Content-Disposition', `attachment; filename=invoice-${row.sub_order_code}.pdf`);
     res.send(pdfBuffer);
 
-    console.log(`[vendor]: Invoice Exported Successful - Order: ${order.order_code}`);
+    console.log(`[vendor]: Invoice Exported Successful - Sub-order: ${row.sub_order_code}`);
   } catch (err) {
     console.error('[Error - exportOrderPDF]:', err);
     sendResponse(res, 500, false, 'Internal Server Error');
@@ -792,3 +965,70 @@ export const exportOrderPDF = async (req: Request, res: Response): Promise<void>
     if (browser) await browser.close();
   }
 };
+
+export const getVendorFees = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const vendorId = req.user?.vendor_id;
+    if (!vendorId) {
+      sendResponse(res, 403, false, 'Vendor context required.', null);
+      return;
+    }
+
+    const vendorRes = await db.query(
+      `SELECT v.id as vendor_id, v.store_name, v.fee_tier_id, ft.tier_name, ft.description
+       FROM vendors v
+       LEFT JOIN fee_tiers ft ON v.fee_tier_id = ft.id
+       WHERE v.id = $1::uuid`,
+      [vendorId]
+    );
+
+    if (!vendorRes.rows || vendorRes.rows.length === 0) {
+      sendResponse(res, 404, false, 'Không tìm thấy thông tin người bán.', null);
+      return;
+    }
+
+    let feeTierId = vendorRes.rows[0].fee_tier_id;
+    let tierName = vendorRes.rows[0].tier_name;
+    let description = vendorRes.rows[0].description;
+
+    // Fallback if no tier is explicitly set
+    if (!feeTierId) {
+      const defaultTierRes = await db.query(
+        "SELECT id, tier_name, description FROM fee_tiers WHERE tier_name = 'Hạng Thường' LIMIT 1"
+      );
+      if (defaultTierRes.rows && defaultTierRes.rows.length > 0) {
+        feeTierId = defaultTierRes.rows[0].id;
+        tierName = defaultTierRes.rows[0].tier_name;
+        description = defaultTierRes.rows[0].description;
+      } else {
+        tierName = 'Hạng Thường';
+        description = 'Hạng phí mặc định dành cho nhà bán hàng chưa xác thực.';
+      }
+    }
+
+
+    let items = [];
+    if (feeTierId) {
+      const itemsRes = await db.query(
+        `SELECT id, fee_name, fee_type, fee_value 
+         FROM fee_tier_items 
+         WHERE fee_tier_id = $1::uuid`,
+        [feeTierId]
+      );
+      items = itemsRes.rows;
+    }
+
+    sendResponse(res, 200, true, 'Lấy thông tin biểu phí của shop thành công.', {
+      vendor_id: vendorId,
+      store_name: vendorRes.rows[0].store_name,
+      fee_tier_id: feeTierId,
+      tier_name: tierName,
+      description: description,
+      items: items
+    });
+  } catch (err) {
+    console.error('Error getVendorFees:', err);
+    sendResponse(res, 500, false, 'Internal Server Error', null);
+  }
+};
+
