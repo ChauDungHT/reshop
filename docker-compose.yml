@@ -51,6 +51,7 @@ services:
       - ./frontend:/app
       - /app/storefront/node_modules
       - /app/shared-ui/node_modules
+      - ./.env:/.env
     depends_on:
       - backend
 
