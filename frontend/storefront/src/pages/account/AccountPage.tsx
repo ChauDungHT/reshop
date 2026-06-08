@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../../shared-ui/src/context/AuthContext';
+import axiosInstance from '../../../../shared-ui/src/lib/axios';
+import AvatarUpload from '../../components/AvatarUpload';
 
 const profileSchema = z.object({
   name: z.string().min(2, 'Tên tối thiểu 2 ký tự'),
@@ -14,19 +17,52 @@ type ProfileForm = z.infer<typeof profileSchema>;
 
 const AccountPage = () => {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'profile' | 'address' | 'security'>('profile');
   const [saved, setSaved] = useState(false);
 
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<ProfileForm>({
-    resolver: zodResolver(profileSchema),
-    defaultValues: { name: user?.name || '', email: user?.email || '' },
+  // Fetch real-time profile data from the database
+  const { data: profileData, isLoading } = useQuery({
+    queryKey: ['profile'],
+    queryFn: async () => {
+      const res = await axiosInstance.get('/users/profile');
+      return res.data.data;
+    },
   });
 
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<ProfileForm>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      name: profileData?.name || user?.name || '',
+      email: profileData?.email || user?.email || '',
+      phone: profileData?.phone || '',
+    },
+  });
+
+  // Sync form default values once profile data is loaded
+  useEffect(() => {
+    if (profileData) {
+      reset({
+        name: profileData.name || '',
+        email: profileData.email || '',
+        phone: profileData.phone || '',
+      });
+    }
+  }, [profileData, reset]);
+
   const onSubmit = async (data: ProfileForm) => {
-    // TODO: axiosInstance.put('/profile', data)
-    await new Promise(r => setTimeout(r, 800));
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+    try {
+      await axiosInstance.put('/users/profile', {
+        name: data.name,
+        phone: data.phone || null,
+      });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err: any) {
+      console.error('[AccountPage update error]:', err);
+      alert(err.response?.data?.message || 'Có lỗi xảy ra khi cập nhật thông tin.');
+    }
   };
 
   const tabs = [
@@ -34,6 +70,14 @@ const AccountPage = () => {
     { key: 'address', label: 'Địa chỉ', icon: '📍' },
     { key: 'security', label: 'Bảo mật', icon: '🔒' },
   ] as const;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -43,17 +87,15 @@ const AccountPage = () => {
       </div>
 
       {/* Avatar Section */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex items-center gap-5">
-        <div className="w-16 h-16 rounded-2xl bg-indigo-600 flex items-center justify-center text-2xl font-black text-white shrink-0">
-          {user?.name.charAt(0).toUpperCase()}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col items-center justify-center">
+        <AvatarUpload
+          currentAvatarUrl={profileData?.avatar_url}
+          userName={profileData?.name || user?.name}
+        />
+        <div className="text-center mt-2">
+          <p className="font-bold text-slate-100 text-lg">{profileData?.name || user?.name}</p>
+          <p className="text-slate-500 text-sm">{profileData?.email || user?.email}</p>
         </div>
-        <div>
-          <p className="font-bold text-slate-100 text-lg">{user?.name}</p>
-          <p className="text-slate-500 text-sm">{user?.email}</p>
-        </div>
-        <button className="ml-auto text-xs border border-slate-700 hover:border-slate-500 text-slate-400 hover:text-slate-200 px-3 py-1.5 rounded-lg transition-colors">
-          Đổi ảnh
-        </button>
       </div>
 
       {/* Tabs */}
@@ -85,7 +127,7 @@ const AccountPage = () => {
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Email</label>
-              <input {...register('email')} type="email" className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all" />
+              <input {...register('email')} type="email" disabled className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 text-slate-500 text-sm focus:outline-none cursor-not-allowed" />
               {errors.email && <p className="mt-1.5 text-xs text-rose-400">{errors.email.message}</p>}
             </div>
             <div>

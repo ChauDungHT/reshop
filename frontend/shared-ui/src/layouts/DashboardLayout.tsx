@@ -186,13 +186,16 @@ const DashboardLayout = () => {
                   {roleLabel[user.role]}
                 </span>
               </div>
-              <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold overflow-hidden border border-slate-700 shadow-md shrink-0">
+              <NavLink
+                to="/account"
+                className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold overflow-hidden border border-slate-700 shadow-md shrink-0 hover:ring-2 hover:ring-indigo-500/50 transition-all"
+              >
                 {profileData?.avatar_url ? (
                   <img src={`${axiosInstance.defaults.baseURL?.replace('/api', '')}${profileData.avatar_url}`} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
                   (profileData?.name || user.name).charAt(0).toUpperCase()
                 )}
-              </div>
+              </NavLink>
               <button
                 onClick={handleLogout}
                 className="ml-2 rounded-full border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-rose-400"

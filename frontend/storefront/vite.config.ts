@@ -11,7 +11,13 @@ export default defineConfig({
   resolve: {
     alias: {
       '@shared-ui': path.resolve(__dirname, '../shared-ui/src'),
+      'react/jsx-dev-runtime': path.resolve(__dirname, './node_modules/react/jsx-dev-runtime'),
+      'react/jsx-runtime': path.resolve(__dirname, './node_modules/react/jsx-runtime'),
+      'react': path.resolve(__dirname, './node_modules/react'),
+      'react-dom': path.resolve(__dirname, './node_modules/react-dom'),
+      '@tanstack/react-query': path.resolve(__dirname, './node_modules/@tanstack/react-query'),
     },
+    dedupe: ['react', 'react-dom', 'react-router', 'react-router-dom', '@tanstack/react-query'],
   },
   test: {
     globals: true,

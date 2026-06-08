@@ -1,11 +1,11 @@
 # prompt thực thi các bước ở Backend:
 ```
-bạn được phép yêu cầu các công cụ cần thiết để thực thi yêu cầu trong file @contextScopeItemMention, luôn luôn đặt tên các file làm việc theo mẫu `scratch-*.js` kiểm tra quan hệ trong @contextScopeItemMention và sử dụng các test trong @contextScopeItemMention để kiểm tra, không được dùng `as any` để fix lỗi biên dịch và cập nhật vào @contextScopeItemMention, chạy `rm scratch-*.js` sau khi hoàn thành
+bạn được phép yêu cầu các công cụ cần thiết để thực thi yêu cầu trong file @contextScopeItemMention, KHÔNG TỰ TẠO HÌNH ẢNH, cần hình ảnh nào thì hãy yêu cầu thành 1 danh sách và tôi sẽ gửi cho bạn, luôn luôn đặt tên các file làm việc theo mẫu `scratch-*.js` kiểm tra quan hệ trong @contextScopeItemMention và sử dụng các test trong @contextScopeItemMention để kiểm tra, không được dùng `as any` để fix lỗi biên dịch và cập nhật vào @contextScopeItemMention, chạy `rm scratch-*.js` sau khi hoàn thành
 ```
 
 # prompt thực thi các bước ở frontend:
 ```
-server backend và frontend đã được chạy, các tài khoản được đề cập ở @contextScopeItemMention, thực thi yêu cầu trong @contextScopeItemMention, thực hiện các bài test trong @contextScopeItemMention, Restart container frontend để Vite rescan toàn bộ file tree bằng lệnh `docker compose restart frontend`
+server backend và frontend đã được chạy, các tài khoản được đề cập ở @contextScopeItemMention, thực thi yêu cầu trong @contextScopeItemMention, KHÔNG TỰ TẠO HÌNH ẢNH, cần hình ảnh nào thì hãy yêu cầu thành 1 danh sách và tôi sẽ gửi cho bạn, thực hiện các bài test trong @contextScopeItemMention, Restart container frontend để Vite rescan toàn bộ file tree bằng lệnh `docker compose restart frontend`
 ```
 
 # prompt yêu cầu chia nhỏ các file backendteam, frontendteam, testteam:

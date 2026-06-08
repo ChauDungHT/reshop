@@ -212,14 +212,14 @@ const AdminDashboard = () => {
         />
         <StatCard
           label="Người Dùng Hoạt Động"
-          value={stats.active_users.toLocaleString()}
+          value={stats.active_users.toLocaleString('vi-VN')}
           icon="👥"
           accent="text-indigo-400"
           sub="Tài khoản trên toàn sàn"
         />
         <StatCard
           label="Sản Phẩm Đang Bán"
-          value={stats.active_products.toLocaleString()}
+          value={stats.active_products.toLocaleString('vi-VN')}
           icon="🏪"
           accent="text-violet-400"
           sub="Sản phẩm đang kích hoạt"

@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import axiosInstance, { BASE_URL } from '../../../../shared-ui/src/lib/axios';
 import { useAuth } from '../../../../shared-ui/src/context/AuthContext';
 import { useCart } from '../../../../shared-ui/src/context/CartContext';
+import { getFullImageUrl, getThumbnailUrl } from '../../shared/utils/image';
 import { useQueryClient } from '@tanstack/react-query';
 import type { IProduct, IReview, IQAItem } from '@shared-ui/types/models';
 
@@ -91,8 +92,8 @@ const ProductDetailPage = () => {
 
   const { product, relatedProducts, reviews, qa } = data;
   const images = product.image_urls && product.image_urls.length > 0 
-    ? product.image_urls.map(img => img.startsWith('http') ? img : `${BASE_URL}${img}`)
-    : [PLACEHOLDER_IMG];
+    ? product.image_urls 
+    : [null];
 
   const filteredReviews = ratingFilter === 0 
     ? reviews 
@@ -112,7 +113,7 @@ const ProductDetailPage = () => {
         <div className="space-y-4">
           <div className="aspect-square overflow-hidden rounded-4xl bg-slate-900 border border-white/5">
             <img 
-              src={images[activeImg]} 
+              src={getFullImageUrl(images[activeImg])} 
               alt={product.name} 
               className="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
             />
@@ -127,7 +128,7 @@ const ProductDetailPage = () => {
                     activeImg === i ? 'border-indigo-500' : 'border-transparent grayscale hover:grayscale-0'
                   }`}
                 >
-                  <img src={img} className="h-full w-full object-cover" alt="" />
+                  <img src={getThumbnailUrl(img)} className="h-full w-full object-cover" alt="" />
                 </button>
               ))}
             </div>
@@ -329,7 +330,7 @@ const ProductDetailPage = () => {
               >
                 <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-slate-800">
                   <img 
-                    src={rp.image_urls?.[0] ? (rp.image_urls[0].startsWith('http') ? rp.image_urls[0] : `${BASE_URL}${rp.image_urls[0]}`) : PLACEHOLDER_IMG} 
+                    src={getThumbnailUrl(rp.image_urls?.[0])} 
                     className="h-full w-full object-cover transition-transform group-hover:scale-110" 
                     alt={rp.name} 
                   />

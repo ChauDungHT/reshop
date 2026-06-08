@@ -29,6 +29,7 @@ jest.mock('multer', () => {
     }
   });
   multer.diskStorage = () => jest.fn();
+  multer.memoryStorage = () => jest.fn();
   return multer;
 });
 

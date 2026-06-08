@@ -513,7 +513,14 @@ export const getVendorProductById = async (req: Request, res: Response): Promise
       return;
     }
 
-    sendResponse<IProduct>(res, 200, true, 'Product retrieved successfully', result.rows[0] as IProduct);
+    const product = result.rows[0];
+    const imagesResult = await db.query(
+      "SELECT id, url, is_primary, display_order FROM product_images WHERE product_id = $1 ORDER BY is_primary DESC, display_order ASC, created_at ASC",
+      [id]
+    );
+    product.images = imagesResult.rows;
+
+    sendResponse(res, 200, true, 'Product retrieved successfully', product);
   } catch (err) {
     console.error('Error getVendorProductById:', err);
     sendResponse<null>(res, 500, false, 'Internal Server Error', null);
@@ -617,6 +624,11 @@ export const bulkDeleteProducts = async (req: Request, res: Response): Promise<v
     const { ids } = req.body;
     const vendor_id = req.user?.vendor_id;
 
+    if (!vendor_id) {
+      sendResponse(res, 403, false, 'Not authorized as a vendor');
+      return;
+    }
+
     if (!ids || !Array.isArray(ids)) {
       sendResponse(res, 400, false, 'Invalid product IDs');
       return;
@@ -644,6 +656,24 @@ export const bulkDeleteProducts = async (req: Request, res: Response): Promise<v
       `UPDATE products SET status = 'deleted', deleted_at = NOW() WHERE id = ANY($1) AND vendor_id = $2`,
       [ids, vendor_id]
     );
+
+    // Delete records from product_images table
+    await db.query(
+      `DELETE FROM product_images WHERE product_id = ANY($1)`,
+      [ids]
+    );
+
+    // Delete physical files from disk
+    if (process.env.NODE_ENV !== 'test') {
+      for (const productId of ids) {
+        if (typeof productId === 'string') {
+          const productDir = path.join(process.cwd(), 'uploads', 'products', vendor_id, productId);
+          if (fs.existsSync(productDir)) {
+            fs.rmSync(productDir, { recursive: true, force: true });
+          }
+        }
+      }
+    }
 
     console.log(`[vendor]: Bulk Delete Successful - Vendor: ${vendor_id}`);
     sendResponse<null>(res, 200, true, 'Products successfully soft-deleted', null);

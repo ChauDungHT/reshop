@@ -84,8 +84,8 @@ const App = () => {
 
           <Route path="/dashboard" element={<DashboardRouter />} />
 
-          {/* Customer */}
-          <Route element={<RoleRoute allowedRoles={['customer']} />}>
+          {/* Customer & Vendor Personal Profile */}
+          <Route element={<RoleRoute allowedRoles={['customer', 'vendor']} />}>
             <Route path="/account" element={<AccountPage />} />
           </Route>
 

@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axiosInstance, { BASE_URL } from '@shared-ui/lib/axios';
 import { getFullImageUrl } from '@shared-ui/lib/image-utils';
 import ImageUploader from '@shared-ui/components/ImageUploader';
+import ProductImageUpload from '../../components/ProductImageUpload';
 
 const VendorProductForm = () => {
   const { id } = useParams();
@@ -23,6 +24,7 @@ const VendorProductForm = () => {
 
   const [images, setImages] = useState<File[]>([]);
   const [existingImages, setExistingImages] = useState<string[]>([]);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   // 1. Fetch Categories
   const { data: categories } = useQuery<any[]>({
@@ -43,8 +45,9 @@ const VendorProductForm = () => {
     enabled: isEdit
   });
 
+  // Initialize form fields once when productData is loaded
   useEffect(() => {
-    if (productData) {
+    if (productData && !hasLoaded) {
       setFormData({
         name: productData.name || '',
         description: productData.description || '',
@@ -54,6 +57,13 @@ const VendorProductForm = () => {
         is_featured: !!productData.is_featured,
         status: productData.status || 'active'
       });
+      setHasLoaded(true);
+    }
+  }, [productData, hasLoaded]);
+
+  // Keep existingImages synchronized with productData image_urls on any updates
+  useEffect(() => {
+    if (productData) {
       const rawUrls = Array.isArray(productData.image_urls) ? productData.image_urls : [];
       const urls = rawUrls.map((url: string) => getFullImageUrl(url));
       setExistingImages(urls);
@@ -172,12 +182,17 @@ const VendorProductForm = () => {
           </div>
 
           <div className="bg-slate-900 border border-white/5 rounded-3xl p-8">
-            <ImageUploader 
-                maxImages={8}
-                initialPreviews={existingImages}
-                onChange={handleImagesChange}
-                onRemoveInitial={handleRemoveExistingImage}
-            />
+            {isEdit ? (
+              <ProductImageUpload
+                productId={id!}
+                images={productData?.images || []}
+              />
+            ) : (
+              <ImageUploader 
+                  maxImages={8}
+                  onChange={handleImagesChange}
+              />
+            )}
           </div>
         </div>
 

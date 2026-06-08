@@ -5,31 +5,17 @@ import sharp from 'sharp';
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { UploadRequest } from '../types/request';
+import { sendResponse } from '../response';
 
-// Đảm bảo thư mục temp tồn tại
-const tempDir = path.join(process.cwd(), 'uploads', 'temp');
-if (!fs.existsSync(tempDir)) {
-  fs.mkdirSync(tempDir, { recursive: true });
-}
+const storage = multer.memoryStorage();
 
-// Cấu hình Multer lưu tạm vào uploads/temp
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, tempDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = crypto.randomUUID();
-    cb(null, `${uniqueSuffix}${path.extname(file.originalname)}`);
-  },
-});
-
-// Chặn các file không phải JPG/PNG và giới hạn 5MB
+// Chặn các file không phải JPG/PNG/WebP và giới hạn 5MB
 const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-  const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error('Chỉ chấp nhận định dạng ảnh JPG/PNG'));
+    cb(new Error('INVALID_FILE_TYPE'));
   }
 };
 
@@ -42,11 +28,29 @@ export const upload = multer({
 });
 
 /**
- * Middleware xử lý ảnh sau khi upload lên thư mục temp.
- * Thực hiện: Resize (max 1200px), Chuyển WebP, Lưu vào products/{vendor_id}/ hoặc vendors/{vendor_id}/
+ * Middleware xử lý lỗi Multer và loại file ảnh không hợp lệ
  */
-export const processProductImages = async (req: UploadRequest, res: Response, next: NextFunction) => {
-  // Lấy vendorId từ user (authMiddleware cấp)
+export const handleMulterError = (err: any, req: Request, res: Response, next: NextFunction): void => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      sendResponse(res, 400, false, 'Chỉ chấp nhận ảnh định dạng JPEG, PNG, WebP dưới 5MB.');
+      return;
+    }
+    sendResponse(res, 400, false, `Lỗi upload: ${err.message}`);
+    return;
+  }
+  if (err && err.message === 'INVALID_FILE_TYPE') {
+    sendResponse(res, 400, false, 'Chỉ chấp nhận ảnh định dạng JPEG, PNG, WebP dưới 5MB.');
+    return;
+  }
+  next(err);
+};
+
+/**
+ * Middleware xử lý ảnh sau khi upload lên bộ nhớ đệm (Memory).
+ * Thực hiện: Resize (max 1200px), Chuyển WebP (quality 85%), Lưu vào products/{vendor_id}/ hoặc vendors/{vendor_id}/
+ */
+export const processProductImages = async (req: UploadRequest, res: Response, next: NextFunction): Promise<void> => {
   const vendorId = req.user?.vendor_id || 'unassigned';
   const productDir = path.join(process.cwd(), 'uploads', 'products', vendorId);
   const vendorAssetsDir = path.join(process.cwd(), 'uploads', 'vendors', vendorId);
@@ -97,21 +101,16 @@ export const processProductImages = async (req: UploadRequest, res: Response, ne
 };
 
 /**
- * Helper xử lý từng file đơn lẻ
+ * Helper xử lý từng file đơn lẻ từ buffer bộ nhớ đệm
  */
 async function processSingleFile(file: Express.Multer.File, destDir: string, vendorId: string, subPath: string): Promise<string> {
   const filename = `${crypto.randomUUID()}.webp`;
   const outputPath = path.join(destDir, filename);
 
-  await sharp(file.path)
+  await sharp(file.buffer)
     .resize({ width: 1200, withoutEnlargement: true })
-    .webp({ quality: 80 })
+    .webp({ quality: 85 })
     .toFile(outputPath);
-
-  // Xóa file tạm
-  if (fs.existsSync(file.path)) {
-    fs.unlinkSync(file.path);
-  }
 
   return `/uploads/${subPath}/${vendorId}/${filename}`;
 }

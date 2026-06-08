@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useDebounce } from '../../../../shared-ui/src/hooks/useDebounce';
 import axiosInstance, { BASE_URL } from '../../../../shared-ui/src/lib/axios';
-import { getFullImageUrl } from '../../../../shared-ui/src/lib/image-utils';
+import { getFullImageUrl, getThumbnailUrl } from '../../shared/utils/image';
 
 interface Category {
   id: string;
@@ -37,7 +37,7 @@ const PLACEHOLDER_IMG = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000
 const formatPrice = (value: number) => `${value.toLocaleString('vi-VN')}₫`;
 
 const ProductCard = ({ product }: { product: Product }) => {
-  const imgSrc = product.image_urls?.[0] ? getFullImageUrl(product.image_urls[0]) : PLACEHOLDER_IMG;
+  const imgSrc = product.image_urls?.[0] ? getThumbnailUrl(product.image_urls[0]) : PLACEHOLDER_IMG;
   return (
     <Link to={`/product/${product.id}`} className="block h-full">
       <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-700 hover:shadow-lg cursor-pointer h-full">

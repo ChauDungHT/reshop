@@ -5,6 +5,7 @@ import { useAuth } from '../../../../shared-ui/src/context/AuthContext';
 import axiosInstance, { BASE_URL } from '../../../../shared-ui/src/lib/axios';
 import { daysSince } from '../../../../shared-ui/src/lib/dateUtils';
 import type { IOrder, IOrderItem, ISubOrder, IWalletTransaction, IUser, IApiResponse } from '../../../../shared-ui/src/types';
+import AvatarUpload from '../../components/AvatarUpload';
 
 const formatPrice = (value: number) => `${Number(value).toLocaleString('vi-VN')}₫`;
 
@@ -806,32 +807,10 @@ const CustomerDashboard = () => {
             <div className="p-8 space-y-8">
               {/* Avatar Section */}
               <div className="flex flex-col items-center gap-4 py-4">
-                <div className="relative group">
-                  <div className="h-32 w-32 rounded-full overflow-hidden border-4 border-slate-800 shadow-2xl relative">
-                    <img 
-                      src={profileData?.avatar_url ? `${BASE_URL}${profileData.avatar_url}` : 'https://ui-avatars.com/api/?name=' + (user?.name || 'User') + '&background=6366f1&color=fff&size=128'} 
-                      alt="Avatar" 
-                      className="h-full w-full object-cover transition duration-300 group-hover:scale-110"
-                    />
-                    {avatarMutation.isPending && (
-                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                        <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      </div>
-                    )}
-                  </div>
-                  <label className="absolute bottom-0 right-0 h-10 w-10 bg-indigo-600 hover:bg-indigo-500 rounded-full border-4 border-slate-900 flex items-center justify-center cursor-pointer shadow-xl transition-all hover:scale-110">
-                    <span className="text-white text-lg">📷</span>
-                    <input 
-                      type="file" 
-                      className="hidden" 
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) avatarMutation.mutate(file);
-                      }}
-                    />
-                  </label>
-                </div>
+                <AvatarUpload
+                  currentAvatarUrl={profileData?.avatar_url}
+                  userName={profileData?.name || user?.name}
+                />
                 <div className="text-center">
                   <h4 className="text-white font-bold">{profileData?.name || user?.name}</h4>
                   <p className="text-slate-500 text-xs">{profileData?.email || user?.email}</p>

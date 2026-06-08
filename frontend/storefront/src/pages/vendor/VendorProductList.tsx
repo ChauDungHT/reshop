@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { getFullImageUrl, getThumbnailUrl } from '../../shared/utils/image';
 import axiosInstance from '@shared-ui/lib/axios';
-import { getFullImageUrl } from '@shared-ui/lib/image-utils';
 import { DataTable } from '@shared-ui/components';
 import type { Column } from '@shared-ui/components/DataTable';
 import { useNavigate } from 'react-router-dom';
@@ -75,7 +75,7 @@ const VendorProductList = () => {
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-slate-800 overflow-hidden flex-shrink-0 border border-slate-700">
             {row.image_urls?.[0] ? (
-              <img src={getFullImageUrl(row.image_urls[0])} alt={name} className="w-full h-full object-cover" />
+              <img src={getThumbnailUrl(row.image_urls[0])} alt={name} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-xs text-slate-500">N/A</div>
             )}

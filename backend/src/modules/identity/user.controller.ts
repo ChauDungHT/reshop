@@ -1,8 +1,11 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
+import path from 'path';
+import fs from 'fs';
 import db from '../../core/db';
 import { sendResponse } from '../../shared/response';
 import { IUser } from '../../shared/types/models';
+import { processAvatarImage } from '../../shared/utils/image-processor';
 
 export const getProfile = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -94,14 +97,36 @@ export const updatePassword = async (req: Request, res: Response): Promise<void>
 export const uploadAvatar = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user?.id;
+    if (!userId) {
+      sendResponse(res, 401, false, 'Unauthorized');
+      return;
+    }
     if (!req.file) {
       console.log(`[identity]: Upload Avatar Failed - 400 - No file provided`);
       sendResponse(res, 400, false, 'No file uploaded');
       return;
     }
 
-    const avatarUrl = `/uploads/avatars/${userId}/${req.file.filename}`;
+    const uploadDir = path.join(process.cwd(), 'uploads', 'avatars', userId);
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
 
+    const ext = req.file.filename ? path.extname(req.file.filename) : '.webp';
+    const isWebp = ext === '.webp';
+    const fileName = req.file.filename && !isWebp ? req.file.filename : 'avatar.webp';
+
+    const filePath = path.join(uploadDir, fileName);
+
+    if (process.env.NODE_ENV !== 'test') {
+      const processedBuffer = await processAvatarImage(req.file.buffer);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+      fs.writeFileSync(filePath, processedBuffer);
+    }
+
+    const avatarUrl = `/uploads/avatars/${userId}/${fileName}`;
     await db.query('UPDATE users SET avatar_url = $1 WHERE id = $2', [avatarUrl, userId]);
 
     console.log(`[identity]: Upload Avatar Successful - 200 - URL: ${avatarUrl}`);

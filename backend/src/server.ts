@@ -20,11 +20,15 @@ import toolPermissionRoutes from './modules/identity/tool-permission.route';
 const app: Express = express();
 const port = process.env.PORT || 8000;
 
-app.use(cors());
+const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+app.use(cors({
+  origin: frontendUrl,
+  credentials: true
+}));
 app.use(express.json());
 
 // Global static files route
-app.use('/uploads', express.static(path.join(__dirname, '../../uploads')));
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Routes
 app.use('/api/auth', authRoutes);
