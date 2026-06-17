@@ -212,6 +212,36 @@ const Chatbot: React.FC = () => {
     }
   };
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!toolPermissions.read_image) return;
+
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.indexOf('image') !== -1) {
+        const file = item.getAsFile();
+        if (!file) continue;
+
+        e.preventDefault();
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          if (!event.target?.result) return;
+          const base64String = (event.target.result as string).split(",")[1];
+          setSelectedFile({
+            data: base64String,
+            mime_type: file.type,
+            preview: event.target.result as string
+          });
+        };
+        reader.readAsDataURL(file);
+        break;
+      }
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -280,6 +310,28 @@ const Chatbot: React.FC = () => {
       chatFormRef.current.style.borderRadius = "32px";
     }
 
+    let roleGreeting = "Khách (Guest)";
+    let roleContext = "Bạn đang nói chuyện với một khách vãng lai chưa đăng nhập. Hãy xưng hô lịch sự, tư vấn thân thiện và khuyến khích họ đăng nhập hoặc đăng ký tài khoản Reshop.";
+
+    if (user) {
+      if (user.role === 'admin') {
+        roleGreeting = `Quản trị viên (Admin - ${user.name})`;
+        roleContext = `Bạn đang nói chuyện với Quản trị viên hệ thống tên là ${user.name}. Hãy xưng hô tôn trọng (ví dụ: "Anh/Chị ${user.name}" hoặc "Quản trị viên"), hỗ trợ họ các vấn đề về quản trị hệ thống, duyệt shop, quản lý tranh chấp và theo dõi doanh số toàn sàn.`;
+      } else if (user.role === 'vendor') {
+        roleGreeting = `Đối tác / Nhà bán hàng (Vendor - ${user.name})`;
+        roleContext = `Bạn đang nói chuyện với Đối tác / Nhà bán hàng (Vendor) tên là ${user.name}. Hãy xưng hô chuyên nghiệp, thân thiện (ví dụ: "Anh/Chị ${user.name}" hoặc "Nhà bán hàng"), hỗ trợ họ về quản lý sản phẩm, đơn hàng, trả hàng, phí bán hàng, ví cửa hàng và hỏi đáp của khách hàng.`;
+      } else if (user.role === 'customer') {
+        roleGreeting = `Khách hàng (Customer - ${user.name})`;
+        roleContext = `Bạn đang nói chuyện với Khách hàng (Customer) tên là ${user.name}. Hãy xưng hô thân mật, nhiệt tình (ví dụ: "Anh/Chị ${user.name}" hoặc "Khách hàng"), hỗ trợ họ về mua sắm sản phẩm, xem giỏ hàng, thanh toán qua VNPay, quản lý đơn hàng mua, đổi trả hàng và gửi câu hỏi cho shop.`;
+      }
+    }
+
+    const systemInstructionText = `Bạn là trợ lý ảo AI thân thiện, chuyên nghiệp của sàn thương mại điện tử CD Reshop. Hãy hỗ trợ người dùng nhiệt tình, chính xác và ngắn gọn bằng tiếng Việt. Nếu người dùng tải ảnh lên, hãy phân tích ảnh đó liên quan tới câu hỏi của họ.
+
+Bối cảnh cuộc trò chuyện hiện tại:
+- Người dùng hiện tại có vai trò: ${roleGreeting}.
+- Hướng dẫn xưng hô và nội dung: ${roleContext}`;
+
     const requestOptions = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -288,7 +340,7 @@ const Chatbot: React.FC = () => {
         systemInstruction: {
           parts: [
             {
-              text: "Bạn là trợ lý ảo thân thiện, chuyên nghiệp của sàn thương mại điện tử CD Reshop. Hãy hỗ trợ tư vấn khách hàng nhiệt tình, chính xác và ngắn gọn bằng tiếng Việt. Nếu người dùng tải ảnh lên, hãy phân tích ảnh đó liên quan tới câu hỏi của họ.",
+              text: systemInstructionText,
             },
           ],
         },
@@ -399,6 +451,7 @@ const Chatbot: React.FC = () => {
               value={inputMessage}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
               placeholder="Nhập tin nhắn..." 
               className="message-input" 
               required={!selectedFile}

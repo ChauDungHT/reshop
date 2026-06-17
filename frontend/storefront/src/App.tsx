@@ -17,6 +17,7 @@ import ShopPage from './pages/shop/ShopPage';
 import ProductDetailPage from './pages/shop/ProductDetailPage';
 import CartPage from './pages/shop/CartPage';
 import CheckoutPage from './pages/shop/CheckoutPage';
+import PaymentReturnPage from './pages/shop/PaymentReturnPage';
 import ForbiddenPage from './pages/error/ForbiddenPage';
 
 // Vendor Pages
@@ -29,6 +30,7 @@ import VendorOrderDetail from './pages/vendor/VendorOrderDetail';
 import VendorReturnList from './pages/vendor/VendorReturnList';
 import VendorQAPage from './pages/vendor/VendorQAPage';
 import VendorFees from './pages/vendor/VendorFees';
+import VendorWallet from './pages/vendor/VendorWallet';
 
 import { useAuth } from '../../shared-ui/src/context/AuthContext';
 import DisputeList from './pages/admin/disputes/DisputeList';
@@ -39,6 +41,7 @@ import UserList from './pages/admin/users/UserList';
 import CategoryManagement from './pages/admin/categories/CategoryManagement';
 import ShopOversight from './pages/admin/shops/ShopOversight';
 import FeeTierManagement from './pages/admin/fees/FeeTierManagement';
+import AdminSettings from './pages/admin/settings/AdminSettings';
 
 const AdminPlaceholder = ({ title }: { title: string }) => (
   <div className="bg-slate-900 border border-slate-800 rounded-2xl p-10 text-center flex flex-col items-center justify-center space-y-4 shadow-xl">
@@ -78,6 +81,7 @@ const App = () => {
       <Route element={<PrivateRoute />}>
         <Route element={<StorefrontLayout />}>
           <Route path="/checkout" element={<CheckoutPage />} />
+          <Route path="/payment/return" element={<PaymentReturnPage />} />
         </Route>
 
         <Route element={<DashboardLayout />}>
@@ -100,6 +104,7 @@ const App = () => {
             <Route path="/vendor/orders/:id" element={<VendorOrderDetail />} />
             <Route path="/vendor/returns" element={<VendorReturnList />} />
             <Route path="/vendor/qa" element={<VendorQAPage />} />
+            <Route path="/vendor/wallet" element={<VendorWallet />} />
             <Route path="/vendor/fees" element={<VendorFees />} />
           </Route>
 
@@ -122,7 +127,7 @@ const App = () => {
             <Route path="/admin/fees" element={<FeeTierManagement />} />
             <Route path="/admin/disputes" element={<DisputeList />} />
             <Route path="/admin/disputes/:id" element={<DisputeDetail />} />
-            <Route path="/admin/settings" element={<AdminPlaceholder title="Cấu Hình Hệ Thống" />} />
+            <Route path="/admin/settings" element={<AdminSettings />} />
           </Route>
         </Route>
 

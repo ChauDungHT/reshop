@@ -115,7 +115,7 @@ CREATE TABLE IF NOT EXISTS
 -- Seed tool permissions with default values allowing all roles initially
 INSERT INTO tool_permissions (tool_code, tool_name, allowed_roles)
 VALUES
-  ('read_image', 'Đọc thông tin từ hình ảnh', '["admin", "vendor", "customer", "guest"]'::jsonb),
+  ('read_image', 'Đọc & dán hình ảnh từ clipboard', '["admin", "vendor", "customer", "guest"]'::jsonb),
   ('search_image', 'Tìm kiếm theo hình ảnh', '["admin", "vendor", "customer", "guest"]'::jsonb),
   ('product_recommendation', 'Gợi ý sản phẩm', '["admin", "vendor", "customer", "guest"]'::jsonb),
   ('chatbot', 'Chatbot', '["admin", "vendor", "customer", "guest"]'::jsonb),
@@ -193,6 +193,12 @@ CREATE TABLE IF NOT EXISTS
         refunded_amount DECIMAL(15, 2) DEFAULT 0,         -- [Risk 5-B] accumulated refund total; NEVER modify total_amount
         status OrderStatus DEFAULT 'pending',
         shipping_address JSONB,
+        payment_method       VARCHAR(20) DEFAULT 'cod',
+        payment_status       VARCHAR(20) DEFAULT 'pending',
+        vnpay_transaction_no VARCHAR(15),
+        vnpay_bank_code      VARCHAR(20),
+        vnpay_card_type      VARCHAR(20),
+        vnpay_pay_date       TIMESTAMP WITH TIME ZONE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT now (),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT now ()
     );
@@ -358,3 +364,22 @@ CREATE INDEX IF NOT EXISTS idx_qa_user_id ON qa (user_id);
 CREATE INDEX IF NOT EXISTS idx_return_requests_status ON return_requests (status);
 
 CREATE INDEX IF NOT EXISTS idx_product_images_product_id ON product_images (product_id);
+
+-- VNPAY Transactions Table
+CREATE TABLE IF NOT EXISTS vnpay_transactions (
+  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_id           UUID REFERENCES orders(id) ON DELETE SET NULL,
+  txn_ref            VARCHAR(100) NOT NULL, -- maps to orders.order_code
+  transaction_no     VARCHAR(15),           -- vnp_TransactionNo từ VNPAY
+  command            VARCHAR(16) NOT NULL,  -- pay | querydr | refund
+  amount             DECIMAL(15, 2) NOT NULL,
+  response_code      VARCHAR(2),
+  transaction_status VARCHAR(2),
+  bank_code          VARCHAR(20),
+  card_type          VARCHAR(20),
+  raw_request        JSONB,
+  raw_response       JSONB,
+  created_at         TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_vnpay_transactions_txn_ref ON vnpay_transactions(txn_ref);
+CREATE INDEX IF NOT EXISTS idx_vnpay_transactions_order_id ON vnpay_transactions(order_id);

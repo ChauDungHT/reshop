@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS tool_permissions (
 -- Seed tool permissions with default values allowing all roles initially
 INSERT INTO tool_permissions (tool_code, tool_name, allowed_roles)
 VALUES
-  ('read_image', 'Đọc thông tin từ hình ảnh', '["admin", "vendor", "customer", "guest"]'::jsonb),
+  ('read_image', 'Đọc & dán hình ảnh từ clipboard', '["admin", "vendor", "customer", "guest"]'::jsonb),
   ('search_image', 'Tìm kiếm theo hình ảnh', '["admin", "vendor", "customer", "guest"]'::jsonb),
   ('product_recommendation', 'Gợi ý sản phẩm', '["admin", "vendor", "customer", "guest"]'::jsonb),
   ('chatbot', 'Chatbot', '["admin", "vendor", "customer", "guest"]'::jsonb),

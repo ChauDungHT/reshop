@@ -3,6 +3,8 @@ import { sendResponse } from '../../shared/response';
 import db from '../../core/db';
 import { IWalletTransaction } from '../../shared/types/models';
 import { IPaginatedData } from '../../shared/types/api';
+import { generatePaymentUrl } from '../payment/vnpay.utils';
+import { handleVNPAYIPN } from '../payment/payment.controller';
 
 /**
  * Lấy số dư ví hiện tại của người dùng
@@ -150,12 +152,41 @@ export const createVNPayPayment = async (req: Request, res: Response): Promise<v
       return;
     }
 
-    // TODO: Thực hiện logic tạo URL VNPay tại đây
-    // Tạm thời trả về thông báo để sẵn sàng tích hợp
-    console.log(`[wallet-vnpay]: Initiate payment request for User: ${userId}, Amount: ${amount}`);
-    
-    sendResponse<{ payment_url: string }>(res, 200, true, 'Sẵn sàng tích hợp VNPay', {
-      payment_url: 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?placeholder=true'
+    if (!userId) {
+      sendResponse(res, 401, false, 'Unauthorized');
+      return;
+    }
+
+    const forwarded = req.headers['x-forwarded-for'];
+    const ipAddr = typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : (req.socket.remoteAddress || '127.0.0.1');
+
+    // Sinh mã giao dịch WL-timestamp-random (dưới 30 ký tự để tránh lỗi chữ ký VNPAY do vượt quá 30 ký tự)
+    const orderCode = `WL-${Date.now().toString().slice(-8)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+
+    // Lưu transaction khởi tạo vào vnpay_transactions để giữ thông tin userId
+    await db.query(
+      `INSERT INTO vnpay_transactions (
+         txn_ref, command, amount, raw_request
+       ) VALUES ($1, $2, $3, $4)`,
+      [
+        orderCode,
+        'topup',
+        parseFloat(amount),
+        JSON.stringify({ userId }),
+      ]
+    );
+
+    const paymentUrl = generatePaymentUrl({
+      orderCode,
+      amount: parseFloat(amount),
+      ipAddr,
+      orderInfo: `Nap tien vao vi ReShop`,
+    });
+
+    console.log(`[wallet-vnpay]: Created payment URL for User: ${userId}, Amount: ${amount}, Code: ${orderCode}`);
+
+    sendResponse<{ payment_url: string }>(res, 200, true, 'Tạo link nạp tiền thành công', {
+      payment_url: paymentUrl
     });
   } catch (err) {
     console.error('Error createVNPayPayment:', err);
@@ -166,23 +197,79 @@ export const createVNPayPayment = async (req: Request, res: Response): Promise<v
 /**
  * VNPay: Xử lý Callback (IPN)
  */
-export const vnpayCallback = async (req: Request, res: Response): Promise<void> => {
-  try {
-    // VNPay gửi các tham số qua query string
-    const vnp_params = req.query;
-    
-    console.log('[wallet-vnpay]: Received callback from VNPay', vnp_params);
+export const vnpayCallback = handleVNPAYIPN;
 
-    // TODO: 
-    // 1. Kiểm tra Checksum (Secure Hash)
-    // 2. Kiểm tra trạng thái giao dịch (vnp_ResponseCode === '00')
-    // 3. Kiểm tra số tiền
-    // 4. Cập nhật ví người dùng
-    
-    // Trả về kết quả cho VNPay theo đúng định dạng IPN
-    res.status(200).json({ RspCode: '00', Message: 'Confirm Success' });
+/**
+ * Rút tiền từ ví khả dụng (Yêu cầu rút tiền)
+ */
+export const withdraw = async (req: Request, res: Response): Promise<void> => {
+  const client = await db.pool.connect();
+  try {
+    const userId = req.user?.id;
+    const { amount } = req.body;
+
+    if (!userId) {
+      sendResponse(res, 401, false, 'Unauthorized');
+      return;
+    }
+
+    const numAmount = parseFloat(amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      console.log(`[wallet]: Withdraw Failed - 400 - Invalid amount: ${amount}`);
+      sendResponse(res, 400, false, 'Số tiền rút không hợp lệ');
+      return;
+    }
+
+    await client.query('BEGIN');
+
+    // 1. Kiểm tra số dư và trạng thái tài khoản
+    const userRes = await client.query('SELECT status, wallet_balance FROM users WHERE id = $1 FOR UPDATE', [userId]);
+    if (userRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      sendResponse(res, 404, false, 'Không tìm thấy người dùng');
+      return;
+    }
+
+    const userRow = userRes.rows[0];
+    if (userRow.status !== 'active') {
+      await client.query('ROLLBACK');
+      sendResponse(res, 403, false, 'Tài khoản của bạn đã bị khóa hoặc chưa kích hoạt');
+      return;
+    }
+
+    const balance = parseFloat(userRow.wallet_balance);
+    if (balance < numAmount) {
+      await client.query('ROLLBACK');
+      sendResponse(res, 400, false, 'Số dư ví khả dụng không đủ để thực hiện yêu cầu rút tiền');
+      return;
+    }
+
+    const newBalance = balance - numAmount;
+
+    // 2. Cập nhật số dư người dùng
+    await client.query('UPDATE users SET wallet_balance = $1 WHERE id = $2', [newBalance, userId]);
+
+    // 3. Ghi log giao dịch rút tiền
+    const transactionQuery = `
+      INSERT INTO wallet_transactions (user_id, amount, type, balance_after)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id, created_at
+    `;
+    const transactionResult = await client.query(transactionQuery, [userId, -numAmount, 'withdraw', newBalance]);
+
+    await client.query('COMMIT');
+
+    console.log(`[wallet]: Withdraw Request Successful - 200 - User ID: ${userId}, Amount: ${numAmount}`);
+    sendResponse<{ transaction_id: string; new_balance: number; created_at: string; }>(res, 200, true, 'Yêu cầu rút tiền thành công và đang được xử lý', {
+      transaction_id: transactionResult.rows[0].id,
+      new_balance: newBalance,
+      created_at: transactionResult.rows[0].created_at
+    });
   } catch (err) {
-    console.error('Error vnpayCallback:', err);
-    res.status(500).json({ RspCode: '99', Message: 'Internal Error' });
+    await client.query('ROLLBACK');
+    console.error('Error withdraw:', err);
+    sendResponse(res, 500, false, 'Internal Server Error');
+  } finally {
+    client.release();
   }
 };

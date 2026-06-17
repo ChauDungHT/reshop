@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth, type UserRole } from '../context/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import axiosInstance from '../lib/axios';
+import Chatbot from '../components/Chatbot';
 
 interface NavItem {
   label: string;
@@ -24,6 +25,7 @@ const navByRole: Record<UserRole, NavItem[]> = {
     { label: 'Trả hàng', path: '/vendor/returns', icon: '↩️' },
     { label: 'Hỏi & Đáp', path: '/vendor/qa', icon: '💬' },
     { label: 'Gian hàng', path: '/vendor/shop-profile', icon: '🏪' },
+    { label: 'Ví cửa hàng', path: '/vendor/wallet', icon: '👛' },
     { label: 'Phí sản phẩm', path: '/vendor/fees', icon: '💸' },
   ],
   admin: [
@@ -215,6 +217,7 @@ const DashboardLayout = () => {
           <Outlet />
         </div>
       </main>
+      <Chatbot />
     </div>
   );
 };

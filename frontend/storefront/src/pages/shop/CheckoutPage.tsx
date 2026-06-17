@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useCart } from '../../../../shared-ui/src/context/CartContext';
 import { useAuth } from '../../../../shared-ui/src/context/AuthContext';
@@ -58,6 +58,23 @@ const CheckoutPage = () => {
   const [shippingMethod, setShippingMethod] = useState('standard'); // 'standard' (20k), 'fast' (50k)
   const [paymentMethod, setPaymentMethod] = useState('cod'); // 'cod', 'wallet'
   const [platformVoucher, setPlatformVoucher] = useState('');
+  const [walletBalance, setWalletBalance] = useState<number>(user?.wallet_balance || 0);
+
+  useEffect(() => {
+    const fetchBalance = async () => {
+      try {
+        const res = await axiosInstance.get('/wallet/balance');
+        if (res.data.success) {
+          setWalletBalance(res.data.data.balance);
+        }
+      } catch (err) {
+        console.error('Failed to fetch wallet balance:', err);
+      }
+    };
+    if (user) {
+      fetchBalance();
+    }
+  }, [user]);
 
   const selectedItems = cartItems.filter((i) => i.selected && i.current_stock > 0);
   const subtotal = selectedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -106,6 +123,11 @@ const CheckoutPage = () => {
 
       const res = await axiosInstance.post('/checkout', payload);
       if (res.data.success) {
+        if (paymentMethod === 'vnpay' && res.data.data.vnpayUrl) {
+          clearCart();
+          window.location.href = res.data.data.vnpayUrl;
+          return;
+        }
         setSuccessOrder(res.data.data);
         clearCart();
         setStep(4);
@@ -244,23 +266,35 @@ const CheckoutPage = () => {
                       <span className="text-2xl">👛</span>
                       <div>
                         <p className="font-bold text-white">Thanh toán qua Ví Reshop</p>
-                        <p className="text-xs text-slate-500">Số dư hiện tại: <span className="text-indigo-400 font-bold">{formatPrice(user?.wallet_balance || 0)}</span></p>
+                        <p className="text-xs text-slate-500">Số dư hiện tại: <span className="text-indigo-400 font-bold">{formatPrice(walletBalance)}</span></p>
                       </div>
                     </div>
                   </div>
-                  {paymentMethod === 'wallet' && user && user.wallet_balance < total && (
+                  {paymentMethod === 'wallet' && user && walletBalance < total && (
                     <div className="bg-rose-500/10 border border-rose-500/30 p-4 rounded-2xl flex items-center justify-between">
-                      <p className="text-xs text-rose-400">Số dư không đủ. Bạn cần nạp thêm {formatPrice(total - user.wallet_balance)}</p>
+                      <p className="text-xs text-rose-400">Số dư không đủ. Bạn cần nạp thêm {formatPrice(total - walletBalance)}</p>
                       <button onClick={() => navigate('/dashboard')} className="text-xs font-bold text-white bg-rose-600 px-3 py-1.5 rounded-lg">Nạp ngay</button>
                     </div>
                   )}
+                </label>
+                <label className={`flex items-center justify-between p-6 rounded-3xl border cursor-pointer transition ${
+                  paymentMethod === 'vnpay' ? 'bg-indigo-600/10 border-indigo-500' : 'bg-slate-950 border-white/5'
+                }`}>
+                  <div className="flex items-center gap-4">
+                    <input type="radio" name="pay" checked={paymentMethod === 'vnpay'} onChange={() => setPaymentMethod('vnpay')} className="hidden" />
+                    <span className="text-2xl">💳</span>
+                    <div>
+                      <p className="font-bold text-white">Thanh toán qua cổng VNPAY</p>
+                      <p className="text-xs text-slate-500">Thẻ ATM nội địa, QR Code, thẻ quốc tế Visa/Master/JCB</p>
+                    </div>
+                  </div>
                 </label>
               </div>
               <div className="flex gap-4">
                 <button onClick={() => setStep(2)} className="flex-1 rounded-3xl border border-slate-700 py-4 font-bold text-slate-300 hover:bg-slate-800 transition">Quay lại</button>
                 <button 
                   onClick={handlePlaceOrder} 
-                  disabled={isSubmitting || !!(paymentMethod === 'wallet' && user && user.wallet_balance < total)}
+                  disabled={isSubmitting || !!(paymentMethod === 'wallet' && user && walletBalance < total)}
                   className="flex-2 rounded-3xl bg-emerald-600 py-4 font-bold text-white hover:bg-emerald-500 transition disabled:opacity-50 shadow-lg shadow-emerald-500/20"
                 >
                   {isSubmitting ? 'Đang xử lý...' : `Đặt hàng: ${formatPrice(total)}`}

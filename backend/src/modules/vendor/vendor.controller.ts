@@ -9,6 +9,7 @@ import { UploadRequest } from '../../shared/types/request';
 import { IOrder, IReturnRequest, IProduct, IVendor } from '../../shared/types/models';
 import { IPaginatedData } from '../../shared/types/api';
 import { calculateVendorFee } from '../../shared/fee-calculator';
+import { refundTransaction, getGMT7DateString } from '../payment/vnpay.utils';
 
 // Đăng ký helper cho handlebars
 handlebars.registerHelper('formatCurrency', (value) => {
@@ -28,6 +29,30 @@ function rollupOrderStatusFromSubOrders(distinctStatuses: string[]): string {
   if (some((s) => s === 'processing')) return 'processing';
   if (some((s) => s === 'confirmed')) return 'confirmed';
   return 'pending';
+}
+
+function netSubOrderPayable(row: {
+  subtotal: string | number;
+  shipping_fee: string | number;
+  vendor_discount: string | number;
+  platform_discount: string | number;
+}): number {
+  return (
+    parseFloat(String(row.subtotal)) +
+    parseFloat(String(row.shipping_fee)) -
+    parseFloat(String(row.vendor_discount)) -
+    parseFloat(String(row.platform_discount))
+  );
+}
+
+async function orderWasPaidWithWallet(client: any, orderId: string, buyerId: string): Promise<boolean> {
+  const r = await client.query(
+    `SELECT 1 FROM wallet_transactions
+     WHERE ref_id = $1::uuid AND user_id = $2::uuid AND type = 'payment'
+     LIMIT 1`,
+    [orderId, buyerId]
+  );
+  return r.rows.length > 0;
 }
 
 /**
@@ -126,10 +151,12 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
     await client.query('BEGIN');
 
     const subRes = await client.query(
-      `SELECT so.id, so.status, so.order_id, so.subtotal, so.shipping_fee, so.vendor_discount, so.platform_discount
+      `SELECT so.id, so.status, so.order_id, so.subtotal, so.shipping_fee, so.vendor_discount, so.platform_discount, so.refunded_amount,
+              o.buyer_id, o.order_code, o.payment_method, o.payment_status, o.vnpay_transaction_no, o.vnpay_pay_date, o.vnpay_bank_code, o.vnpay_card_type
        FROM sub_orders so
+       JOIN orders o ON o.id = so.order_id
        WHERE so.id = $1::uuid AND so.vendor_id = $2::uuid
-       FOR UPDATE OF so`,
+       FOR UPDATE OF so, o`,
       [subOrderId, vendorId]
     );
 
@@ -143,8 +170,6 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
       order_id: string;
       status: string;
     };
-
-    await client.query(`SELECT id, status FROM orders WHERE id = $1::uuid FOR UPDATE`, [orderId]);
 
     const myItemsRes = await client.query(
       `SELECT oi.id, oi.product_id, oi.quantity
@@ -183,6 +208,92 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
     if (status === 'cancelled') {
       for (const item of myItemsRes.rows) {
         await client.query(`UPDATE products SET stock = stock + $1 WHERE id = $2`, [item.quantity, item.product_id]);
+      }
+
+      const row = subRes.rows[0];
+      const refund = netSubOrderPayable(row);
+
+      if (row.payment_method === 'vnpay' && row.payment_status === 'paid') {
+        const refundResult = await refundTransaction({
+          orderCode: row.order_code,
+          amount: refund,
+          transactionNo: row.vnpay_transaction_no,
+          transactionDate: getGMT7DateString(row.vnpay_pay_date || new Date()),
+          createBy: 'vendor_' + req.user?.id,
+          ipAddr: '127.0.0.1',
+          transactionType: '03', // Hoàn một phần
+        });
+
+        console.log(`[vnpay-refund]: vendor cancelSubOrder refundResult:`, refundResult);
+
+        if (refundResult.vnp_ResponseCode !== '00') {
+          throw new Error('VNPAY_REFUND_FAILED:' + (refundResult.vnp_Message || 'Mã lỗi ' + refundResult.vnp_ResponseCode));
+        }
+
+        await client.query(
+          `INSERT INTO vnpay_transactions (
+             order_id, txn_ref, transaction_no, command, amount,
+             response_code, transaction_status, bank_code, card_type,
+             raw_request, raw_response
+           ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+          [
+            row.order_id,
+            row.order_code,
+            refundResult.vnp_TransactionNo || row.vnpay_transaction_no,
+            'refund',
+            refund,
+            refundResult.vnp_ResponseCode,
+            refundResult.vnp_TransactionStatus || '00',
+            row.vnpay_bank_code || 'NCB',
+            row.vnpay_card_type || 'ATM',
+            JSON.stringify({ orderCode: row.order_code, amount: refund }),
+            JSON.stringify(refundResult),
+          ]
+        );
+
+        await client.query(
+          `UPDATE sub_orders
+           SET refunded_amount = refunded_amount + $1
+           WHERE id = $2::uuid`,
+          [refund, subOrderId]
+        );
+
+        await client.query(
+          `UPDATE orders
+           SET refunded_amount = refunded_amount + $1
+           WHERE id = $2::uuid`,
+          [refund, row.order_id]
+        );
+      } else if (refund > 0 && (await orderWasPaidWithWallet(client, row.order_id, row.buyer_id))) {
+        await client.query(
+          `UPDATE users
+           SET wallet_balance = wallet_balance + $1
+           WHERE id = $2::uuid`,
+          [refund, row.buyer_id]
+        );
+
+        const walletRes = await client.query(`SELECT wallet_balance FROM users WHERE id = $1::uuid`, [row.buyer_id]);
+        const newBalance = parseFloat(walletRes.rows[0].wallet_balance);
+
+        await client.query(
+          `INSERT INTO wallet_transactions (user_id, amount, type, ref_id, balance_after)
+           VALUES ($1::uuid, $2, $3, $4::uuid, $5)`,
+          [row.buyer_id, refund, 'refund', subOrderId, newBalance]
+        );
+
+        await client.query(
+          `UPDATE sub_orders
+           SET refunded_amount = refunded_amount + $1
+           WHERE id = $2::uuid`,
+          [refund, subOrderId]
+        );
+
+        await client.query(
+          `UPDATE orders
+           SET refunded_amount = refunded_amount + $1
+           WHERE id = $2::uuid`,
+          [refund, row.order_id]
+        );
       }
     }
 
@@ -255,7 +366,19 @@ export const updateOrderStatus = async (req: Request, res: Response): Promise<vo
     const distinctStatuses = distinctRes.rows.map((r: { status: string }) => r.status);
     const newParentStatus = rollupOrderStatusFromSubOrders(distinctStatuses);
 
-    await client.query(`UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2::uuid`, [newParentStatus, orderId]);
+    if (newParentStatus === 'cancelled') {
+      const row = subRes.rows[0];
+      await client.query(
+        `UPDATE orders
+         SET status = 'cancelled',
+             payment_status = $1,
+             updated_at = NOW()
+         WHERE id = $2::uuid`,
+        [row.payment_method === 'vnpay' ? 'refunded' : 'failed', orderId]
+      );
+    } else {
+      await client.query(`UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2::uuid`, [newParentStatus, orderId]);
+    }
 
     await client.query('COMMIT');
     console.log(`[vendor]: Sub-order status updated - sub_order: ${subOrderId}, vendor: ${vendorId}, status: ${status}`);
@@ -326,13 +449,14 @@ export const approveReturnByVendor = async (req: Request, res: Response): Promis
 
     // Get info & Lock
     const reqRes = await client.query(
-      `SELECT rr.id, rr.status, oi.product_id, oi.quantity, oi.price_snapshot, oi.sub_order_id, o.buyer_id, p.vendor_id
+      `SELECT rr.id, rr.status, oi.product_id, oi.quantity, oi.price_snapshot, oi.sub_order_id, o.buyer_id, p.vendor_id,
+              o.order_code, o.payment_method, o.payment_status, o.vnpay_transaction_no, o.vnpay_pay_date, o.vnpay_bank_code, o.vnpay_card_type, o.id AS parent_order_id
        FROM return_requests rr
        JOIN order_items oi ON rr.order_item_id = oi.id
        JOIN products p ON oi.product_id = p.id
        JOIN orders o ON oi.order_id = o.id
        WHERE rr.id = $1::uuid
-       FOR UPDATE OF rr`,
+       FOR UPDATE OF rr, o`,
       [id]
     );
 
@@ -346,6 +470,14 @@ export const approveReturnByVendor = async (req: Request, res: Response): Promis
       price_snapshot: string | number;
       buyer_id: string;
       sub_order_id: string | null;
+      parent_order_id: string;
+      order_code: string;
+      payment_method: string;
+      payment_status: string;
+      vnpay_transaction_no: string;
+      vnpay_pay_date: Date | null;
+      vnpay_bank_code: string | null;
+      vnpay_card_type: string | null;
     };
     if (!row.sub_order_id) throw new Error('MISSING_SUB_ORDER');
 
@@ -356,20 +488,66 @@ export const approveReturnByVendor = async (req: Request, res: Response): Promis
 
     await client.query(`UPDATE return_requests SET status = 'approved', updated_at = NOW() WHERE id = $1::uuid`, [id]);
 
-    await client.query(`UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id = $2::uuid`, [
-      refundAmount,
-      row.buyer_id,
-    ]);
+    if (row.payment_method === 'vnpay' && row.payment_status === 'paid') {
+      const refundResult = await refundTransaction({
+        orderCode: row.order_code,
+        amount: refundAmount,
+        transactionNo: row.vnpay_transaction_no,
+        transactionDate: getGMT7DateString(row.vnpay_pay_date || new Date()),
+        createBy: 'vendor_' + req.user?.id,
+        ipAddr: '127.0.0.1',
+        transactionType: '03', // Hoàn tiền một phần
+      });
 
-    // Get the updated wallet balance for logging
-    const walletRes = await client.query(`SELECT wallet_balance FROM users WHERE id = $1`, [row.buyer_id]);
-    const newBalance = parseFloat(walletRes.rows[0].wallet_balance);
+      console.log(`[vnpay-refund]: approveReturn refundResult:`, refundResult);
 
-    await client.query(
-      `INSERT INTO wallet_transactions (user_id, amount, type, ref_id, balance_after)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [row.buyer_id, refundAmount, 'refund', row.sub_order_id, newBalance]
-    );
+      if (refundResult.vnp_ResponseCode !== '00') {
+        throw new Error('VNPAY_REFUND_FAILED:' + (refundResult.vnp_Message || 'Mã lỗi ' + refundResult.vnp_ResponseCode));
+      }
+
+      await client.query(
+        `INSERT INTO vnpay_transactions (
+           order_id, txn_ref, transaction_no, command, amount,
+           response_code, transaction_status, bank_code, card_type,
+           raw_request, raw_response
+         ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [
+          row.parent_order_id,
+          row.order_code,
+          refundResult.vnp_TransactionNo || row.vnpay_transaction_no,
+          'refund',
+          refundAmount,
+          refundResult.vnp_ResponseCode,
+          refundResult.vnp_TransactionStatus || '00',
+          row.vnpay_bank_code || 'NCB',
+          row.vnpay_card_type || 'ATM',
+          JSON.stringify({ orderCode: row.order_code, amount: refundAmount }),
+          JSON.stringify(refundResult),
+        ]
+      );
+
+      await client.query(
+        `UPDATE orders 
+         SET refunded_amount = refunded_amount + $1,
+             updated_at = NOW()
+         WHERE id = $2::uuid`,
+        [refundAmount, row.parent_order_id]
+      );
+    } else {
+      await client.query(`UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id = $2::uuid`, [
+        refundAmount,
+        row.buyer_id,
+      ]);
+
+      const walletRes = await client.query(`SELECT wallet_balance FROM users WHERE id = $1`, [row.buyer_id]);
+      const newBalance = parseFloat(walletRes.rows[0].wallet_balance);
+
+      await client.query(
+        `INSERT INTO wallet_transactions (user_id, amount, type, ref_id, balance_after)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [row.buyer_id, refundAmount, 'refund', row.sub_order_id, newBalance]
+      );
+    }
 
     await client.query(
       `UPDATE sub_orders SET refunded_amount = refunded_amount + $1, updated_at = NOW() WHERE id = $2::uuid`,
@@ -383,14 +561,16 @@ export const approveReturnByVendor = async (req: Request, res: Response): Promis
     sendResponse<null>(res, 200, true, 'Đã duyệt trả hàng và hoàn tiền cho khách thành công.', null);
   } catch (err: any) {
     await client.query('ROLLBACK');
-    console.error('Error approveReturnByVendor:', err.message);
-    if (err.message === 'NOT_FOUND') sendResponse<null>(res, 404, false, 'Không tìm thấy yêu cầu.', null);
-    else if (err.message === 'FORBIDDEN') sendResponse<null>(res, 403, false, 'Bạn không có quyền xử lý yêu cầu này.', null);
-    else if (err.message === 'ALREADY_PROCESSED') sendResponse<null>(res, 400, false, 'Yêu cầu này đã được xử lý hoặc không hợp lệ.', null);
-    else if (err.message === 'MISSING_SUB_ORDER') {
+    const message = err.message || String(err);
+    console.error('Error approveReturnByVendor:', message);
+    if (message === 'NOT_FOUND') sendResponse<null>(res, 404, false, 'Không tìm thấy yêu cầu.', null);
+    else if (message === 'FORBIDDEN') sendResponse<null>(res, 403, false, 'Bạn không có quyền xử lý yêu cầu này.', null);
+    else if (message === 'ALREADY_PROCESSED') sendResponse<null>(res, 400, false, 'Yêu cầu này đã được xử lý hoặc không hợp lệ.', null);
+    else if (message === 'MISSING_SUB_ORDER') {
       sendResponse<null>(res, 400, false, 'Dòng đơn không gắn sub_order.', null);
-    }
-    else sendResponse<null>(res, 500, false, 'Internal Server Error', null);
+    } else if (message.startsWith('VNPAY_REFUND_FAILED')) {
+      sendResponse<null>(res, 400, false, 'Hoàn tiền VNPAY thất bại: ' + message.split(':')[1], null);
+    } else sendResponse<null>(res, 500, false, 'Internal Server Error', null);
   } finally {
     client.release();
   }
@@ -845,7 +1025,7 @@ export const getVendorProfile = async (req: Request, res: Response): Promise<voi
 export const updateVendorProfile = async (req: UploadRequest, res: Response): Promise<void> => {
   try {
     const vendorId = req.user?.vendor_id;
-    const { store_name, phone, address, email, return_policy_days, return_policy_desc } = req.body;
+    const { store_name, phone, address, email, return_policy_days, return_policy_desc, bank_name, bank_account, bank_owner } = req.body;
     
     const updates: string[] = [];
     const values: any[] = [];
@@ -856,6 +1036,16 @@ export const updateVendorProfile = async (req: UploadRequest, res: Response): Pr
     if (email) { updates.push(`email = $${updates.length + 1}`); values.push(email); }
     if (return_policy_days) { updates.push(`return_policy_days = $${updates.length + 1}`); values.push(parseInt(return_policy_days)); }
     if (return_policy_desc) { updates.push(`return_policy_desc = $${updates.length + 1}`); values.push(return_policy_desc); }
+    
+    if (bank_name || bank_account || bank_owner) {
+      const bank_info = {
+        bank: bank_name || '',
+        account_no: bank_account || '',
+        owner: bank_owner || ''
+      };
+      updates.push(`bank_info = $${updates.length + 1}`);
+      values.push(JSON.stringify(bank_info));
+    }
     
     // Images from middleware
     const logoUrl = req.logoUrl;

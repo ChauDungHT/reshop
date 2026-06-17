@@ -12,6 +12,7 @@ router.use(authMiddleware);
 
 router.get('/balance', walletController.getBalance);
 router.post('/topup', walletController.topup);
+router.post('/withdraw', walletController.withdraw);
 router.get('/history', walletController.getHistory);
 router.post('/vnpay/create-payment', walletController.createVNPayPayment);
 

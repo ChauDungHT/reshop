@@ -12,6 +12,7 @@ export interface IUser {
   role: UserRole;
   status: string;
   wallet_balance: number;
+  pending_balance: number;
   phone?: string | null;
   address?: string | null;
   avatar_url?: string | null;

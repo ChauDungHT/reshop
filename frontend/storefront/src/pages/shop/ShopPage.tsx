@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useDebounce } from '../../../../shared-ui/src/hooks/useDebounce';
 import axiosInstance, { BASE_URL } from '../../../../shared-ui/src/lib/axios';
 import { getFullImageUrl, getThumbnailUrl } from '../../shared/utils/image';
+import { useAuth } from '../../../../shared-ui/src/context/AuthContext';
 
 interface Category {
   id: string;
@@ -94,6 +95,88 @@ const ShopPage = () => {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const debouncedSearch = useDebounce(searchInput, 300);
   const productListRef = React.useRef<HTMLDivElement>(null);
+
+  const [isSearchingByImage, setIsSearchingByImage] = useState(false);
+  const imageSearchInputRef = React.useRef<HTMLInputElement>(null);
+
+  const { user } = useAuth();
+  const currentRole = user?.role || 'guest';
+
+  // Fetch tool permissions to check if image search is allowed
+  const { data: toolPermissions } = useQuery({
+    queryKey: ['tool-permissions'],
+    queryFn: async () => {
+      const response = await axiosInstance.get('/tool-permissions');
+      return response.data.data as { tool_code: string; allowed_roles: string[] }[];
+    },
+  });
+
+  const isImageSearchAllowed = useMemo(() => {
+    if (!toolPermissions) return true; // fallback to true during loading
+    const permission = toolPermissions.find(p => p.tool_code === 'search_image');
+    if (!permission) return true;
+    return permission.allowed_roles.includes(currentRole);
+  }, [toolPermissions, currentRole]);
+
+  const handleImageSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64Data = reader.result as string;
+      const mimeType = file.type;
+      const base64Str = base64Data.split(',')[1];
+      
+      setIsSearchingByImage(true);
+      try {
+        const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+        const API_URL = import.meta.env.VITE_GEMINI_API_URL 
+          ? `${import.meta.env.VITE_GEMINI_API_URL}?key=${API_KEY}`
+          : `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${API_KEY}`;
+
+        const requestOptions = {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    text: 'Hãy phân tích hình ảnh này và trả về duy nhất tên của sản phẩm trong hình. Hãy trả về tên sản phẩm ngắn gọn nhất bằng tiếng Việt hoặc tiếng Anh phổ biến, không thêm bất kỳ từ ngữ giải thích nào khác (không có "Đây là", không có dấu chấm, không giải thích). Ví dụ: "Vợt cầu lông Yonex Astrox 88D".'
+                  },
+                  {
+                    inline_data: {
+                      mime_type: mimeType,
+                      data: base64Str
+                    }
+                  }
+                ]
+              }
+            ]
+          })
+        };
+
+        const response = await fetch(API_URL, requestOptions);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error?.message || "Lỗi kết nối");
+
+        const productName = data.candidates[0].content.parts[0].text.trim();
+        if (productName) {
+          setSearchInput(productName);
+          updateFilters({ q: productName });
+          productListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      } catch (error) {
+        console.error("Lỗi tìm kiếm hình ảnh:", error);
+        alert("Không thể phân tích hình ảnh. Vui lòng thử lại!");
+      } finally {
+        setIsSearchingByImage(false);
+        if (e.target) e.target.value = '';
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const sortBy = searchParams.get('sort') || 'latest';
   const selectedCategory = searchParams.get('category') || '';
@@ -240,6 +323,33 @@ const ShopPage = () => {
               >
                 Tìm
               </button>
+              {isImageSearchAllowed && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => imageSearchInputRef.current?.click()}
+                    disabled={isSearchingByImage}
+                    className="rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-700 px-4 py-3 text-slate-300 transition flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
+                    title="Tìm kiếm bằng hình ảnh"
+                  >
+                    {isSearchingByImage ? (
+                      <div className="w-5 h-5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    )}
+                  </button>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    ref={imageSearchInputRef}
+                    onChange={handleImageSearchChange}
+                    className="hidden"
+                  />
+                </>
+              )}
 
               {/* Suggestions Dropdown */}
               {showSuggestions && suggestionsQuery.data && suggestionsQuery.data.length > 0 && (

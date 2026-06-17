@@ -10,7 +10,7 @@ import { processAvatarImage } from '../../shared/utils/image-processor';
 export const getProfile = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user?.id;
-    const query = 'SELECT id, name, email, role, phone, address, avatar_url, wallet_balance, status, last_login_at, created_at FROM users WHERE id = $1';
+    const query = 'SELECT id, name, email, role, phone, address, avatar_url, wallet_balance, pending_balance, status, last_login_at, created_at FROM users WHERE id = $1';
     const result = await db.query(query, [userId]);
 
     if (result.rows.length === 0) {
@@ -19,8 +19,12 @@ export const getProfile = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
+    const user = result.rows[0];
+    user.wallet_balance = parseFloat(user.wallet_balance || '0');
+    user.pending_balance = parseFloat(user.pending_balance || '0');
+
     console.log(`[identity]: Fetch Profile Successful - 200 - User ID: ${userId}`);
-    sendResponse<IUser>(res, 200, true, 'User profile fetched successfully', result.rows[0] as IUser);
+    sendResponse<IUser>(res, 200, true, 'User profile fetched successfully', user as IUser);
   } catch (error: any) {
     console.log(`[Error - identity]: GET /api/users/profile - 500 - ${error.message}`);
     sendResponse(res, 500, false, 'Internal Server Error');

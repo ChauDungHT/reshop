@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import axiosInstance from '../lib/axios';
 import AdminSidebar from '../components/AdminSidebar';
+import Chatbot from '../components/Chatbot';
 
 const AdminLayout = () => {
   const { user, logout } = useAuth();
@@ -79,6 +80,7 @@ const AdminLayout = () => {
           </div>
         </main>
       </div>
+      <Chatbot />
     </div>
   );
 };

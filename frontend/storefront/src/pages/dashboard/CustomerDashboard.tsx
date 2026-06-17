@@ -145,14 +145,19 @@ const CustomerDashboard = () => {
 
   const topupMutation = useMutation({
     mutationFn: async (amount: number) => {
-      await axiosInstance.post('/wallet/topup', { amount });
+      const res = await axiosInstance.post<IApiResponse<{ payment_url: string }>>('/wallet/vnpay/create-payment', { amount });
+      return res.data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['wallet-history'] });
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
-      alert('Nạp tiền thành công!');
-      setTopupAmount('');
+    onSuccess: (res) => {
+      if (res.data?.payment_url) {
+        window.location.href = res.data.payment_url;
+      } else {
+        alert('Không tìm thấy link thanh toán VNPAY');
+      }
     },
+    onError: (err: any) => {
+      alert(err.response?.data?.message || 'Có lỗi xảy ra khi tạo link nạp tiền');
+    }
   });
 
   const reviewMutation = useMutation({

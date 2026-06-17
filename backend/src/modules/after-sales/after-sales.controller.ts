@@ -3,6 +3,7 @@ import { sendResponse } from '../../shared/response';
 import db from '../../core/db';
 import { IQAItem } from '../../shared/types/models';
 import { calculateVendorFee } from '../../shared/fee-calculator';
+import { refundTransaction, getGMT7DateString } from '../payment/vnpay.utils';
 
 /**
  * Gửi đánh giá sản phẩm
@@ -316,13 +317,14 @@ export const approveReturn = async (req: Request, res: Response): Promise<void> 
     const userRole = req.user?.role;
 
     const reqRes = await client.query(
-      `SELECT rr.id, oi.product_id, oi.quantity, oi.price_snapshot, oi.sub_order_id, o.buyer_id, p.vendor_id
+      `SELECT rr.id, oi.product_id, oi.quantity, oi.price_snapshot, oi.sub_order_id, o.buyer_id, p.vendor_id,
+              o.payment_method, o.payment_status, o.vnpay_transaction_no, o.vnpay_pay_date, o.vnpay_bank_code, o.vnpay_card_type, o.order_code, o.id AS parent_order_id
        FROM return_requests rr
        JOIN order_items oi ON rr.order_item_id = oi.id
        JOIN products p ON oi.product_id = p.id
        JOIN orders o ON oi.order_id = o.id
        WHERE rr.id = $1::uuid
-       FOR UPDATE OF rr`,
+       FOR UPDATE OF rr, o`,
       [id]
     );
 
@@ -356,22 +358,74 @@ export const approveReturn = async (req: Request, res: Response): Promise<void> 
     // 1. Cập nhật trạng thái return_request thành 'approved'
     await client.query(`UPDATE return_requests SET status = 'approved', updated_at = NOW() WHERE id = $1::uuid`, [id]);
 
-    // 2. Hoàn tiền vào ví khả dụng của Người mua
-    const buyerWalletRes = await client.query(
-      `UPDATE users 
-       SET wallet_balance = wallet_balance + $1 
-       WHERE id = $2::uuid 
-       RETURNING wallet_balance`,
-      [refundAmount, buyer_id]
-    );
-    const buyerBalanceAfter = parseFloat(buyerWalletRes.rows[0].wallet_balance);
+    // 2. Hoàn tiền vào ví hoặc VNPAY tùy phương thức thanh toán ban đầu
+    if (requestData.payment_method === 'vnpay' && requestData.payment_status === 'paid') {
+      const refundResult = await refundTransaction({
+        orderCode: requestData.order_code,
+        amount: refundAmount,
+        transactionNo: requestData.vnpay_transaction_no,
+        transactionDate: getGMT7DateString(requestData.vnpay_pay_date || new Date()),
+        createBy: 'admin_vendor_' + (req.user?.id || 'system'),
+        ipAddr: '127.0.0.1',
+        transactionType: '03', // Hoàn tiền một phần
+      });
 
-    // 3. Ghi log giao dịch 'refund' cho Người mua
-    await client.query(
-      `INSERT INTO wallet_transactions (user_id, amount, type, ref_id, balance_after)
-       VALUES ($1::uuid, $2, 'refund', $3::uuid, $4)`,
-      [buyer_id, refundAmount, sub_order_id, buyerBalanceAfter]
-    );
+      console.log(`[vnpay-refund]: approveReturn refundResult:`, refundResult);
+
+      if (refundResult.vnp_ResponseCode !== '00') {
+        throw new Error('VNPAY_REFUND_FAILED:' + (refundResult.vnp_Message || 'Mã lỗi ' + refundResult.vnp_ResponseCode));
+      }
+
+      await client.query(
+        `INSERT INTO vnpay_transactions (
+           order_id, txn_ref, transaction_no, command, amount,
+           response_code, transaction_status, bank_code, card_type,
+           raw_request, raw_response
+         ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [
+          requestData.parent_order_id,
+          requestData.order_code,
+          refundResult.vnp_TransactionNo || requestData.vnpay_transaction_no,
+          'refund',
+          refundAmount,
+          refundResult.vnp_ResponseCode,
+          refundResult.vnp_TransactionStatus || '00',
+          requestData.vnpay_bank_code || 'NCB',
+          requestData.vnpay_card_type || 'ATM',
+          JSON.stringify({ orderCode: requestData.order_code, amount: refundAmount }),
+          JSON.stringify(refundResult),
+        ]
+      );
+
+      await client.query(
+        `UPDATE orders
+         SET refunded_amount = refunded_amount + $1
+         WHERE id = $2::uuid`,
+        [refundAmount, requestData.parent_order_id]
+      );
+    } else {
+      const buyerWalletRes = await client.query(
+        `UPDATE users 
+         SET wallet_balance = wallet_balance + $1 
+         WHERE id = $2::uuid 
+         RETURNING wallet_balance`,
+        [refundAmount, buyer_id]
+      );
+      const buyerBalanceAfter = parseFloat(buyerWalletRes.rows[0].wallet_balance);
+
+      await client.query(
+        `INSERT INTO wallet_transactions (user_id, amount, type, ref_id, balance_after)
+         VALUES ($1::uuid, $2, 'refund', $3::uuid, $4)`,
+        [buyer_id, refundAmount, sub_order_id, buyerBalanceAfter]
+      );
+
+      await client.query(
+        `UPDATE orders
+         SET refunded_amount = refunded_amount + $1
+         WHERE id = $2::uuid`,
+        [refundAmount, requestData.parent_order_id]
+      );
+    }
 
     // 4. Lấy thông tin user_id và commission_rate của Vendor để trừ pending_balance
     const vendorQuery = await client.query(
