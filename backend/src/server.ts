@@ -17,6 +17,7 @@ import adminShopRoutes from './modules/vendor/admin-shop.route';
 import adminFeeRoutes from './modules/vendor/admin-fee.route';
 import adminDisputeRoutes from './modules/after-sales/admin-dispute.route';
 import toolPermissionRoutes from './modules/identity/tool-permission.route';
+import couponRoutes from './modules/coupon/coupon.route';
 
 const app: Express = express();
 const port = process.env.PORT || 8000;
@@ -48,6 +49,7 @@ app.use('/api/admin/shops', adminShopRoutes);
 app.use('/api/admin/fees', adminFeeRoutes);
 app.use('/api/admin/disputes', adminDisputeRoutes);
 app.use('/api/tool-permissions', toolPermissionRoutes);
+app.use('/api/coupons', couponRoutes);
 
 // Global Error Handler
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {

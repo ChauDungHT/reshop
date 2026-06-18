@@ -139,6 +139,9 @@ const CartPage = () => {
             >
               Thanh toán ngay
             </button>
+            <div className="rounded-2xl bg-indigo-500/5 p-4 border border-indigo-500/10 text-center">
+              <p className="text-xs text-indigo-300">💡 Có thể áp dụng mã giảm giá của từng Shop ở bước tiếp theo</p>
+            </div>
             <p className="text-center text-xs text-slate-500 uppercase tracking-widest">
               Giao hàng nhanh toàn quốc
             </p>

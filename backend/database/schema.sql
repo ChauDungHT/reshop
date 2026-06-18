@@ -7,8 +7,11 @@ DROP TYPE IF EXISTS WalletTransactionType CASCADE;
 DROP TYPE IF EXISTS ReturnStatus CASCADE;
 DROP TYPE IF EXISTS ProductStatus CASCADE;
 DROP TYPE IF EXISTS OrderFeedbackStatus CASCADE;
+DROP TYPE IF EXISTS CouponType CASCADE;
 
 CREATE TYPE UserRole AS ENUM ('customer', 'vendor', 'admin');
+
+CREATE TYPE CouponType AS ENUM ('percentage', 'fixed');
 
 CREATE TYPE VendorStatus AS ENUM ('inactive', 'active', 'banned');
 
@@ -100,6 +103,34 @@ CREATE TABLE IF NOT EXISTS
         created_at TIMESTAMP WITH TIME ZONE DEFAULT now (),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT now ()
     );
+
+-- Coupons Table
+CREATE TABLE IF NOT EXISTS coupons (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    vendor_id       UUID NOT NULL REFERENCES vendors(id) ON DELETE CASCADE,
+    code            VARCHAR(50) NOT NULL,
+    name            VARCHAR(150) NOT NULL,
+    type            CouponType NOT NULL,
+    value           DECIMAL(15,2) NOT NULL,
+    min_order_value DECIMAL(15,2) DEFAULT 0,
+    max_discount    DECIMAL(15,2) DEFAULT NULL,
+    total_quantity  INT DEFAULT NULL,
+    per_user_limit  INT DEFAULT 1,
+    starts_at       TIMESTAMP WITH TIME ZONE NOT NULL,
+    expires_at      TIMESTAMP WITH TIME ZONE NOT NULL,
+    status          VARCHAR(20) DEFAULT 'active',
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT unique_vendor_coupon_code UNIQUE (vendor_id, code)
+);
+
+-- User Coupons Table (Wallet)
+CREATE TABLE IF NOT EXISTS user_coupons (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    coupon_id   UUID NOT NULL REFERENCES coupons(id) ON DELETE CASCADE,
+    created_at  TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    UNIQUE(user_id, coupon_id)
+);
 
 -- Tool Permissions Table
 CREATE TABLE IF NOT EXISTS
@@ -216,6 +247,7 @@ CREATE TABLE IF NOT EXISTS
         vendor_discount   DECIMAL(15, 2) DEFAULT 0,
         platform_discount DECIMAL(15, 2) DEFAULT 0,                  -- [Risk 3] pro-rata platform voucher
         refunded_amount   DECIMAL(15, 2) DEFAULT 0,                  -- [Risk 5-B] accumulated refund
+        coupon_id         UUID REFERENCES coupons(id) ON DELETE SET NULL,
         tracking_number   VARCHAR(100) NULL,
         feedback_status   OrderFeedbackStatus DEFAULT NULL,
         delivered_at      TIMESTAMP WITH TIME ZONE DEFAULT NULL,
@@ -383,3 +415,9 @@ CREATE TABLE IF NOT EXISTS vnpay_transactions (
 );
 CREATE INDEX IF NOT EXISTS idx_vnpay_transactions_txn_ref ON vnpay_transactions(txn_ref);
 CREATE INDEX IF NOT EXISTS idx_vnpay_transactions_order_id ON vnpay_transactions(order_id);
+
+-- Coupon indexes
+CREATE INDEX IF NOT EXISTS idx_coupons_vendor_id ON coupons(vendor_id);
+CREATE INDEX IF NOT EXISTS idx_coupons_dates ON coupons(starts_at, expires_at);
+CREATE INDEX IF NOT EXISTS idx_user_coupons_user_id ON user_coupons(user_id);
+CREATE INDEX IF NOT EXISTS idx_sub_orders_coupon_id ON sub_orders(coupon_id);

@@ -60,6 +60,13 @@ const CheckoutPage = () => {
   const [platformVoucher, setPlatformVoucher] = useState('');
   const [walletBalance, setWalletBalance] = useState<number>(user?.wallet_balance || 0);
 
+  // Vendor Coupons State
+  const [selectedCoupons, setSelectedCoupons] = useState<Record<string, string>>({});
+  const [myCoupons, setMyCoupons] = useState<any[]>([]);
+  const [couponDiscounts, setCouponDiscounts] = useState<Record<string, { coupon_id: string; code: string; discount: number }>>({});
+  const [couponErrors, setCouponErrors] = useState<string[]>([]);
+  const [validateLoading, setValidateLoading] = useState(false);
+
   useEffect(() => {
     const fetchBalance = async () => {
       try {
@@ -76,10 +83,53 @@ const CheckoutPage = () => {
     }
   }, [user]);
 
+  useEffect(() => {
+    const fetchMyCoupons = async () => {
+      try {
+        const res = await axiosInstance.get('/coupons/me');
+        if (res.data.success) {
+          setMyCoupons(res.data.data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch my coupons:', err);
+      }
+    };
+    if (user) {
+      fetchMyCoupons();
+    }
+  }, [user]);
+
   const selectedItems = cartItems.filter((i) => i.selected && i.current_stock > 0);
   const subtotal = selectedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const shippingFee = shippingMethod === 'standard' ? 20000 : 50000;
   const voucherNum = Math.max(0, parseInt(platformVoucher.replace(/\D/g, ''), 10) || 0);
+
+  useEffect(() => {
+    const validate = async () => {
+      const couponIds = Object.values(selectedCoupons).filter(Boolean);
+      if (couponIds.length === 0) {
+        setCouponDiscounts({});
+        setCouponErrors([]);
+        return;
+      }
+      setValidateLoading(true);
+      try {
+        const res = await axiosInstance.post('/coupons/validate', {
+          items: selectedItems.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
+          coupon_ids: couponIds,
+        });
+        if (res.data.success) {
+          setCouponDiscounts(res.data.data.vendorDiscounts || {});
+          setCouponErrors(res.data.data.errors || []);
+        }
+      } catch (err) {
+        console.error('Failed to validate coupons:', err);
+      } finally {
+        setValidateLoading(false);
+      }
+    };
+    validate();
+  }, [selectedCoupons, cartItems]);
 
   type ShopGroup = { key: string; label: string; items: typeof selectedItems; lineSub: number };
   const shopGroups: ShopGroup[] = (() => {
@@ -103,7 +153,8 @@ const CheckoutPage = () => {
   shopGroups.forEach((g, idx) => {
     const ship = idx === 0 ? shippingFee : 0;
     const pd = platformByVendor.get(g.key) ?? 0;
-    orderTotal += g.lineSub + ship - pd;
+    const vd = couponDiscounts[g.key]?.discount ?? 0;
+    orderTotal += Math.max(0, g.lineSub + ship - pd - vd);
   });
   const total = orderTotal;
 
@@ -112,6 +163,10 @@ const CheckoutPage = () => {
   }
 
   const handlePlaceOrder = async () => {
+    if (couponErrors.length > 0) {
+      alert(`Mã giảm giá không hợp lệ: ${couponErrors[0]}`);
+      return;
+    }
     setIsSubmitting(true);
     try {
       const payload = {
@@ -119,6 +174,7 @@ const CheckoutPage = () => {
         shipping_address: { ...addressInfo, shipping_method: shippingMethod },
         payment_method: paymentMethod,
         ...(voucherNum > 0 ? { platform_voucher_amount: voucherNum } : {}),
+        coupon_ids: Object.values(selectedCoupons).filter(Boolean),
       };
 
       const res = await axiosInstance.post('/checkout', payload);
@@ -323,7 +379,54 @@ const CheckoutPage = () => {
                       Voucher nền tảng (ước tính shop): −{formatPrice(platformByVendor.get(g.key) ?? 0)}
                     </p>
                   )}
-                  <div className="space-y-2 pt-1 border-t border-white/5">
+
+                  {/* Shop coupons selector */}
+                  {(() => {
+                    const shopCoupons = myCoupons.filter(
+                      (c) => c.vendor_id === g.key &&
+                             new Date(c.expires_at) >= new Date() &&
+                             c.my_used_count < c.per_user_limit
+                    );
+                    if (shopCoupons.length === 0) return null;
+                    return (
+                      <div className="space-y-1 pt-1.5 border-t border-white/5">
+                        <label className="text-[9px] font-bold text-indigo-300 uppercase tracking-wider block">Mã giảm giá shop</label>
+                        <select
+                          value={selectedCoupons[g.key] || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setSelectedCoupons(prev => {
+                              const updated = { ...prev };
+                              if (val) updated[g.key] = val;
+                              else delete updated[g.key];
+                              return updated;
+                            });
+                          }}
+                          className="w-full bg-slate-950 border border-white/5 rounded-lg px-2 py-1 text-[11px] text-white focus:border-indigo-500 outline-none"
+                        >
+                          <option value="">-- Chọn mã --</option>
+                          {shopCoupons.map((c) => {
+                            const discountText = c.type === 'percentage'
+                              ? `Giảm ${parseFloat(c.value)}%`
+                              : `Giảm ${parseFloat(c.value).toLocaleString('vi-VN')}đ`;
+                            const isEligible = g.lineSub >= parseFloat(c.min_order_value || 0);
+                            return (
+                              <option key={c.id} value={c.id} disabled={!isEligible}>
+                                {c.code} - {discountText} {!isEligible ? ' (đơn chưa đủ min)' : ''}
+                              </option>
+                            );
+                          })}
+                        </select>
+                        {couponDiscounts[g.key] && (
+                          <p className="text-[10px] text-emerald-400 font-bold">
+                            Áp dụng: −{formatPrice(couponDiscounts[g.key].discount)}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  <div className="space-y-2 pt-1.5 border-t border-white/5">
                     {g.items.map((item) => (
                       <div key={item.id} className="flex gap-2 text-xs">
                         <img
@@ -369,10 +472,25 @@ const CheckoutPage = () => {
                 <span>Phí ship (1 lần, shop đầu):</span>
                 <span>{formatPrice(shippingFee)}</span>
               </div>
+              {Object.keys(couponDiscounts).length > 0 && (
+                <div className="flex justify-between text-emerald-400 text-xs">
+                  <span>Giảm giá của Shop:</span>
+                  <span>
+                    −{formatPrice(
+                      Object.values(couponDiscounts).reduce((sum, item) => sum + item.discount, 0)
+                    )}
+                  </span>
+                </div>
+              )}
               {voucherNum > 0 && (
                 <div className="flex justify-between text-amber-400/90 text-xs">
                   <span>Voucher (tổng ước tính):</span>
                   <span>−{formatPrice(Math.min(voucherNum, subtotal))}</span>
+                </div>
+              )}
+              {couponErrors.length > 0 && (
+                <div className="text-rose-500 text-[10px] mt-1 font-bold">
+                  ⚠️ {couponErrors[0]}
                 </div>
               )}
               <div className="flex justify-between text-lg font-black text-white pt-2">

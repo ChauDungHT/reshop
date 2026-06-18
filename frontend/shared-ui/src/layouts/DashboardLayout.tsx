@@ -16,6 +16,7 @@ const navByRole: Record<UserRole, NavItem[]> = {
   customer: [
     { label: 'Đơn hàng', path: '/dashboard', icon: '📦' },
     { label: 'Ví Reshop', path: '/dashboard?tab=wallet', icon: '💳' },
+    { label: 'Ví voucher', path: '/dashboard?tab=coupons', icon: '🎟️' },
     { label: 'Hồ sơ', path: '/dashboard?tab=profile', icon: '👤' },
   ],
   vendor: [

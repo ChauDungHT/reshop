@@ -434,6 +434,44 @@ async function seedMaster() {
     }
     console.log('[seeder] Vendor 2 products seeded');
 
+    // 5. Seed Coupons
+    console.log('[seeder] Seeding coupons...');
+    const couponInsertQuery = `
+      INSERT INTO coupons (
+        vendor_id, code, name, type, value, min_order_value, 
+        max_discount, total_quantity, per_user_limit, starts_at, expires_at, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'active')
+    `;
+
+    const now = new Date();
+    const startsAt = new Date(now.getTime() - 24 * 60 * 60 * 1000); // 1 day ago
+    const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days later
+
+    // Vendor 1 coupons
+    await client.query(couponInsertQuery, [
+      vendor1Id, 'PRO20K', 'Giảm 20k đơn từ 200k', 'fixed', 20000, 200000,
+      null, 100, 1, startsAt, expiresAt
+    ]);
+    await client.query(couponInsertQuery, [
+      vendor1Id, 'PRO100K', 'Giảm 100k đơn từ 1M', 'fixed', 100000, 1000000,
+      null, 50, 1, startsAt, expiresAt
+    ]);
+    await client.query(couponInsertQuery, [
+      vendor1Id, 'PRO5PCT', 'Giảm 5% tối đa 150k', 'percentage', 5, 500000,
+      150000, 200, 2, startsAt, expiresAt
+    ]);
+
+    // Vendor 2 coupons
+    await client.query(couponInsertQuery, [
+      vendor2Id, 'TGCL50K', 'Giảm 50k đơn từ 500k', 'fixed', 50000, 500000,
+      null, 100, 1, startsAt, expiresAt
+    ]);
+    await client.query(couponInsertQuery, [
+      vendor2Id, 'TGCL10PCT', 'Giảm 10% tối đa 200k', 'percentage', 10, 800000,
+      200000, 50, 1, startsAt, expiresAt
+    ]);
+    console.log('[seeder] Coupons seeded');
+
     await client.query('COMMIT');
     console.log('[seeder] Master seeding transaction committed successfully!');
   } catch (err) {

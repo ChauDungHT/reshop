@@ -38,6 +38,30 @@ const ProductDetailPage = () => {
   const [isSubmittingQA, setIsSubmittingQA] = useState(false);
   const queryClient = useQueryClient();
 
+  const { data: couponsData, refetch: refetchCoupons } = useQuery({
+    queryKey: ['product-coupons', id],
+    queryFn: async () => {
+      const endpoint = user ? `/coupons/product/${id}` : `/coupons/product/${id}/public`;
+      const response = await axiosInstance.get<{ data: any[] }>(endpoint);
+      return response.data.data;
+    },
+    enabled: !!id,
+  });
+
+  const handleCollectCoupon = async (couponId: string) => {
+    if (!user) {
+      alert('Vui lòng đăng nhập để lưu mã giảm giá!');
+      return;
+    }
+    try {
+      await axiosInstance.post('/coupons/collect', { coupon_id: couponId });
+      alert('Đã lưu mã giảm giá thành công!');
+      refetchCoupons();
+    } catch (error: any) {
+      const errMsg = error.response?.data?.message || 'Có lỗi xảy ra khi lưu mã giảm giá.';
+      alert(errMsg);
+    }
+  };
 
   const handleAddToCart = async () => {
     if (!data?.product) return;
@@ -165,6 +189,50 @@ const ProductDetailPage = () => {
               {product.description || 'Chưa có mô tả cho sản phẩm này.'}
             </div>
           </div>
+
+          {/* Coupons section */}
+          {couponsData && couponsData.length > 0 && (
+            <div className="space-y-4 border-b border-white/5 pb-8">
+              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Mã giảm giá của shop</h3>
+              <div className="flex flex-wrap gap-3">
+                {couponsData.map((coupon: any) => (
+                  <div
+                    key={coupon.id}
+                    className="relative flex items-center bg-slate-900 border border-indigo-500/30 rounded-xl overflow-hidden p-3 pl-4 pr-4 shadow-md transition-all hover:border-indigo-500/60"
+                  >
+                    {/* Ticket cut details on the left */}
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-3 bg-slate-950 rounded-r-full border-y border-r border-indigo-500/30" />
+                    
+                    <div className="flex flex-col space-y-0.5 mr-6">
+                      <span className="text-xs font-black text-indigo-400 uppercase tracking-wide">
+                        {coupon.code}
+                      </span>
+                      <span className="text-sm font-black text-white">
+                        {coupon.type === 'percentage' 
+                          ? `Giảm ${parseFloat(coupon.value)}%` 
+                          : `Giảm ${parseFloat(coupon.value).toLocaleString('vi-VN')}đ`}
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        Đơn tối thiểu {parseFloat(coupon.min_order_value || 0).toLocaleString('vi-VN')}đ
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => handleCollectCoupon(coupon.id)}
+                      disabled={coupon.is_collected}
+                      className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
+                        coupon.is_collected
+                          ? 'bg-emerald-500/10 text-emerald-400 cursor-default'
+                          : 'bg-indigo-600 text-white hover:bg-indigo-500'
+                      }`}
+                    >
+                      {coupon.is_collected ? 'Đã lưu' : 'Lưu mã'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="flex gap-4">
             <button 

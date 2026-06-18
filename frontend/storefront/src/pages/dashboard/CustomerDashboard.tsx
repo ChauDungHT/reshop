@@ -116,6 +116,15 @@ const CustomerDashboard = () => {
     enabled: activeTab === 'profile' || activeTab === 'wallet',
   });
 
+  const { data: coupons, isLoading: couponsLoading } = useQuery<any[]>({
+    queryKey: ['my-wallet-coupons'],
+    queryFn: async () => {
+      const res = await axiosInstance.get<IApiResponse<any[]>>('/coupons/me');
+      return res.data.data;
+    },
+    enabled: activeTab === 'coupons',
+  });
+
   // Mutations
   const cancelMutation = useMutation({
     mutationFn: async (orderId: string) => {
@@ -794,6 +803,82 @@ const CustomerDashboard = () => {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {activeTab === 'coupons' && (
+        <div className="space-y-6">
+          <div className="bg-slate-900 border border-white/5 rounded-3xl p-6 md:p-8">
+            <h3 className="text-xl font-bold text-white mb-2">Ví voucher của bạn</h3>
+            <p className="text-slate-500 text-sm">Danh sách các mã giảm giá của shop bạn đã lưu và có thể sử dụng khi thanh toán.</p>
+          </div>
+
+          {couponsLoading ? (
+            <div className="p-10 text-center text-slate-600">Đang tải ví voucher...</div>
+          ) : !coupons || coupons.length === 0 ? (
+            <div className="p-20 text-center bg-slate-900 rounded-4xl border border-dashed border-slate-800 text-slate-500">
+              Ví voucher trống. Hãy lưu mã tại trang chi tiết sản phẩm!
+            </div>
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2">
+              {coupons.map((coupon) => {
+                const isExpired = new Date(coupon.expires_at) < new Date();
+                const isLimitReached = coupon.my_used_count >= coupon.per_user_limit;
+                const discountText = coupon.type === 'percentage'
+                  ? `Giảm ${parseFloat(coupon.value)}%`
+                  : `Giảm ${parseFloat(coupon.value).toLocaleString('vi-VN')}đ`;
+
+                return (
+                  <div
+                    key={coupon.id}
+                    className={`relative flex bg-slate-900 border rounded-3xl overflow-hidden p-6 gap-6 shadow-xl ${
+                      isExpired || isLimitReached
+                        ? 'border-white/5 opacity-50 grayscale'
+                        : 'border-indigo-500/20 hover:border-indigo-500/40 transition-all'
+                    }`}
+                  >
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-3 h-6 bg-slate-950 rounded-r-full border-y border-r border-white/5" />
+                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-6 bg-slate-950 rounded-l-full border-y border-l border-white/5" />
+
+                    <div className="flex flex-col justify-between flex-1 min-w-0">
+                      <div className="space-y-1">
+                        <span className="inline-block rounded-full bg-indigo-500/10 px-3 py-1 text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
+                          {coupon.store_name || 'Shop'}
+                        </span>
+                        <h4 className="text-xl font-black text-white">{discountText}</h4>
+                        <p className="text-xs text-slate-400">
+                          Đơn tối thiểu: <span className="font-bold text-slate-200">{formatPrice(parseFloat(coupon.min_order_value))}</span>
+                        </p>
+                        {parseFloat(coupon.max_discount) > 0 && (
+                          <p className="text-xs text-slate-400">
+                            Giảm tối đa: <span className="font-bold text-slate-200">{formatPrice(parseFloat(coupon.max_discount))}</span>
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="pt-4 mt-4 border-t border-white/5 flex items-center justify-between text-[11px] text-slate-500">
+                        <div>
+                          <p>Mã: <span className="font-mono font-bold text-indigo-300">{coupon.code}</span></p>
+                          <p>Hạn: {new Date(coupon.expires_at).toLocaleDateString('vi-VN')}</p>
+                        </div>
+                        <div className="text-right">
+                          {isExpired ? (
+                            <span className="font-bold text-rose-500 uppercase">Hết hạn</span>
+                          ) : isLimitReached ? (
+                            <span className="font-bold text-slate-500 uppercase">Hết lượt dùng</span>
+                          ) : (
+                            <span className="font-bold text-emerald-400 uppercase">
+                              Sử dụng: {coupon.my_used_count}/{coupon.per_user_limit} lần
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

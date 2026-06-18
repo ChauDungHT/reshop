@@ -3,6 +3,7 @@ import { sendResponse } from '../../shared/response';
 import db from '../../core/db';
 import { IOrder } from '../../shared/types/models';
 import { generatePaymentUrl, refundTransaction, getGMT7DateString } from '../payment/vnpay.utils';
+import { calculateDiscounts } from '../coupon/coupon.controller';
 
 type ShippingAddress = { shipping_method?: string } & Record<string, unknown>;
 
@@ -64,11 +65,12 @@ export const processCheckout = async (req: Request, res: Response): Promise<void
   const client = await db.pool.connect();
   try {
     const userId = req.user?.id;
-    const { items, shipping_address, payment_method, platform_voucher_amount } = req.body as {
+    const { items, shipping_address, payment_method, platform_voucher_amount, coupon_ids } = req.body as {
       items: Array<{ product_id: string; quantity: number }>;
       shipping_address?: ShippingAddress;
       payment_method?: string;
       platform_voucher_amount?: number;
+      coupon_ids?: string[];
     };
 
     if (!userId) {
@@ -90,6 +92,10 @@ export const processCheckout = async (req: Request, res: Response): Promise<void
     const shippingFeeTotal = resolveShippingFee(shipping_address);
 
     await client.query('BEGIN');
+
+    if (coupon_ids && coupon_ids.length > 0) {
+      await client.query(`SELECT id FROM coupons WHERE id = ANY($1::uuid[]) FOR UPDATE`, [coupon_ids]);
+    }
 
     type LockedLine = {
       product_id: string;
@@ -136,6 +142,11 @@ export const processCheckout = async (req: Request, res: Response): Promise<void
 
     const platformByVendor = allocatePlatformDiscount(vendorSubtotals, platform_voucher_amount ?? 0);
 
+    const calcResult = await calculateDiscounts(userId, items, coupon_ids || [], client);
+    if (calcResult.errors.length > 0) {
+      throw new Error(`COUPON_VALIDATION_ERROR:${calcResult.errors[0]}`);
+    }
+
     const sortedVendorIds = [...vendorSubtotals.keys()].sort((a, b) => a.localeCompare(b));
 
     for (const line of lockedLines) {
@@ -155,12 +166,15 @@ export const processCheckout = async (req: Request, res: Response): Promise<void
       vendor_discount: number;
       platform_discount: number;
       lines: LockedLine[];
+      coupon_id: string | null;
     }> = [];
 
     sortedVendorIds.forEach((vendorId, idx) => {
       const subtotal = vendorSubtotals.get(vendorId) ?? 0;
       const shipping_fee = idx === 0 ? shippingFeeTotal : 0;
-      const vendor_discount = 0;
+      const couponPlan = calcResult.vendorDiscounts.get(vendorId);
+      const vendor_discount = couponPlan ? couponPlan.discount : 0;
+      const coupon_id = couponPlan ? couponPlan.coupon_id : null;
       const platform_discount = platformByVendor.get(vendorId) ?? 0;
       const lines = lockedLines.filter((l) => l.vendor_id === vendorId);
       const subLabel = idx < 26 ? String.fromCharCode(65 + idx) : `V${idx + 1}`;
@@ -175,6 +189,7 @@ export const processCheckout = async (req: Request, res: Response): Promise<void
         vendor_discount,
         platform_discount,
         lines,
+        coupon_id,
       });
     });
 
@@ -220,8 +235,8 @@ export const processCheckout = async (req: Request, res: Response): Promise<void
       const soRes = await client.query(
         `INSERT INTO sub_orders (
            order_id, vendor_id, sub_order_code, status,
-           subtotal, shipping_fee, vendor_discount, platform_discount, refunded_amount
-         ) VALUES ($1, $2, $3, 'pending', $4, $5, $6, $7, 0)
+           subtotal, shipping_fee, vendor_discount, platform_discount, refunded_amount, coupon_id
+         ) VALUES ($1, $2, $3, 'pending', $4, $5, $6, $7, 0, $8)
          RETURNING id`,
         [
           orderId,
@@ -231,6 +246,7 @@ export const processCheckout = async (req: Request, res: Response): Promise<void
           plan.shipping_fee,
           plan.vendor_discount,
           plan.platform_discount,
+          plan.coupon_id,
         ]
       );
       const subOrderId = soRes.rows[0].id;
@@ -279,7 +295,10 @@ export const processCheckout = async (req: Request, res: Response): Promise<void
     const message = err instanceof Error ? err.message : String(err);
     console.error('Error during checkout:', message);
 
-    if (message.startsWith('ERR_OUT_OF_STOCK')) {
+    if (message.startsWith('COUPON_VALIDATION_ERROR:')) {
+      const couponError = message.substring('COUPON_VALIDATION_ERROR:'.length);
+      sendResponse(res, 400, false, couponError);
+    } else if (message.startsWith('ERR_OUT_OF_STOCK')) {
       const productName = message.split(':')[1];
       sendResponse(res, 400, false, `Sản phẩm "${productName}" đã hết hàng.`);
     } else if (message === 'ERR_INSUFFICIENT_BALANCE') {
